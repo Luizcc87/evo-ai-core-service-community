@@ -133,7 +133,7 @@ O serviço utiliza **Bearer Token** para autenticação via tokens do EvoAuth, g
 1. **Token Validation**: Valida tokens via endpoint `/api/v1/me` do EvoAuth
 2. **Bearer Token**: Utiliza apenas o header Authorization com Bearer token
 3. **Account Context**: Extrai automaticamente informações do usuário e contas ativas
-4. **Request Context**: Injeta user_id, account_id, email, name e dados completos no contexto da requisição
+4. **Request Context**: Injeta user_id, email, name e dados completos no contexto da requisição
 
 ### Header Suportado
 
@@ -155,8 +155,7 @@ curl -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
 O middleware (`internal/middleware/evo_auth.go`) implementa:
 
 - ✅ **Validação automática** via API do EvoAuth
-- ✅ **Extração de contexto** (user_id, account_id, email, name, user completo, accounts)
-- ✅ **Isolamento por conta** (todos os recursos filtrados por account_id)
+- ✅ **Extração de contexto** (user_id, email, name, user completo, accounts)
 - ✅ **Bearer Token** único formato suportado
 - ✅ **Logs detalhados** para debugging
 
@@ -258,10 +257,6 @@ Após iniciar o serviço, acesse:
 - `evo_core_folder_shares` - Compartilhamento de pastas
 - `evo_core_mcp_servers` - Servidores Model Context Protocol
 
-### Relacionamentos
-
-Todas as entidades principais referenciam `account_id` do Evolution garantindo isolamento por conta.
-
 ## 🧬 Integração com Frontend
 
 ### CORS Configuration
@@ -331,7 +326,6 @@ func New(db *gorm.DB) *Module {
 
 - Use `NullableUUID` para campos UUID opcionais que podem vir como string vazia
 - Implemente validação de entrada com binding tags do Gin
-- Sempre filtre recursos por `account_id` extraído do contexto
 
 ## 🚢 Deploy
 
