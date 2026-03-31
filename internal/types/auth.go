@@ -43,8 +43,8 @@ type EvoAuthAccount struct {
 	Locale     string           `json:"locale"`
 	CreatedAt  string           `json:"created_at"`
 	UpdatedAt  string           `json:"updated_at"`
-	Features   []EvoAuthFeature `json:"features"`
-	ActivePlan EvoAuthPlan      `json:"active_plan"`
+	Features   json.RawMessage  `json:"features"`
+	ActivePlan *EvoAuthPlan     `json:"active_plan,omitempty"`
 }
 
 // EvoAuthValidateToken represents the complete response from /api/v1/me
