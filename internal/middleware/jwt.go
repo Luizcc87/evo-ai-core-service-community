@@ -35,7 +35,6 @@ func (j *jwtMiddleware) GetJWTMiddleware() gin.HandlerFunc {
 
 		ctx := context.WithValue(c.Request.Context(), "sub", claims.Subject)
 		ctx = context.WithValue(ctx, "email", claims.Email)
-		ctx = context.WithValue(ctx, "account_id", claims.AccountID)
 		ctx = context.WithValue(ctx, "user_id", claims.UserID)
 		ctx = context.WithValue(ctx, "name", claims.Name)
 		ctx = context.WithValue(ctx, "is_admin", claims.Role == "tenant")

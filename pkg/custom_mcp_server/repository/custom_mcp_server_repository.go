@@ -14,12 +14,11 @@ import (
 type CustomMcpServerRepository interface {
 	Create(ctx context.Context, customMcpServer model.CustomMcpServer) (*model.CustomMcpServer, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*model.CustomMcpServer, error)
-	ListByAccountID(ctx context.Context, request model.CustomMcpServerListRequest) ([]*model.CustomMcpServer, error)
-	CountByAccountID(ctx context.Context, request model.CustomMcpServerListRequest) (int64, error)
+	List(ctx context.Context, request model.CustomMcpServerListRequest) ([]*model.CustomMcpServer, error)
+	Count(ctx context.Context, request model.CustomMcpServerListRequest) (int64, error)
 	Update(ctx context.Context, customMcpServer *model.CustomMcpServer, id uuid.UUID) (*model.CustomMcpServer, error)
 	Delete(ctx context.Context, id uuid.UUID) (bool, error)
-	GetByAgentConfig(ctx context.Context, accountID uuid.UUID, serverIDs []uuid.UUID) ([]*model.CustomMcpServer, error)
-	GetByIDAndAccountID(ctx context.Context, id uuid.UUID, accountID uuid.UUID) (*model.CustomMcpServer, error)
+	GetByAgentConfig(ctx context.Context, serverIDs []uuid.UUID) ([]*model.CustomMcpServer, error)
 }
 
 type customMcpServerRepository struct {
@@ -48,10 +47,10 @@ func (r *customMcpServerRepository) GetByID(ctx context.Context, id uuid.UUID) (
 	return &customMcpServer, nil
 }
 
-func (r *customMcpServerRepository) ListByAccountID(ctx context.Context, request model.CustomMcpServerListRequest) ([]*model.CustomMcpServer, error) {
+func (r *customMcpServerRepository) List(ctx context.Context, request model.CustomMcpServerListRequest) ([]*model.CustomMcpServer, error) {
 	var customMcpServer []*model.CustomMcpServer
 
-	query := r.db.WithContext(ctx).Where("account_id = ?", request.AccountID)
+	query := r.db.WithContext(ctx)
 
 	if request.Search != "" {
 		query = query.Where("name ILIKE ?", "%"+request.Search+"%")
@@ -68,10 +67,10 @@ func (r *customMcpServerRepository) ListByAccountID(ctx context.Context, request
 	return customMcpServer, nil
 }
 
-func (r *customMcpServerRepository) CountByAccountID(ctx context.Context, request model.CustomMcpServerListRequest) (int64, error) {
+func (r *customMcpServerRepository) Count(ctx context.Context, request model.CustomMcpServerListRequest) (int64, error) {
 	var count int64
 
-	query := r.db.WithContext(ctx).Model(&model.CustomMcpServer{}).Where("account_id = ?", request.AccountID)
+	query := r.db.WithContext(ctx).Model(&model.CustomMcpServer{})
 
 	if request.Search != "" {
 		query = query.Where("name ILIKE ?", "%"+request.Search+"%")
@@ -105,22 +104,12 @@ func (r *customMcpServerRepository) Delete(ctx context.Context, id uuid.UUID) (b
 	return true, nil
 }
 
-func (r *customMcpServerRepository) GetByAgentConfig(ctx context.Context, accountID uuid.UUID, serverIDs []uuid.UUID) ([]*model.CustomMcpServer, error) {
+func (r *customMcpServerRepository) GetByAgentConfig(ctx context.Context, serverIDs []uuid.UUID) ([]*model.CustomMcpServer, error) {
 	var customMcpServer []*model.CustomMcpServer
 
-	if err := r.db.WithContext(ctx).Where("account_id = ? AND id IN (?)", accountID, serverIDs).Find(&customMcpServer).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("id IN (?)", serverIDs).Find(&customMcpServer).Error; err != nil {
 		return nil, err
 	}
 
 	return customMcpServer, nil
-}
-
-func (r *customMcpServerRepository) GetByIDAndAccountID(ctx context.Context, id uuid.UUID, accountID uuid.UUID) (*model.CustomMcpServer, error) {
-	var customMcpServer model.CustomMcpServer
-
-	if err := r.db.WithContext(ctx).Where("id = ? AND account_id = ?", id, accountID).First(&customMcpServer).Error; err != nil {
-		return nil, err
-	}
-
-	return &customMcpServer, nil
 }

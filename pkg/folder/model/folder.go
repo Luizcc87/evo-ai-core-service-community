@@ -8,7 +8,6 @@ import (
 
 type Folder struct {
 	ID          uuid.UUID `json:"-" gorm:"<-:create;type:uuid;primary_key;default:uuid_generate_v4()"`
-	AccountID   uuid.UUID `json:"-" gorm:"<-:create;not null;type:uuid"` // Removed foreign key reference to external accounts table
 	Name        string    `json:"-" gorm:"not null; type:varchar(255)"`
 	Description string    `json:"-" gorm:"not null; type:text"`
 	CreatedAt   time.Time `json:"-" gorm:"autoCreateTime;not null" default:"now()"`
@@ -34,7 +33,6 @@ type FolderUpdateRequest struct {
 
 type FolderResponse struct {
 	ID          uuid.UUID `json:"id"`
-	AccountID   uuid.UUID `json:"account_id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -54,7 +52,6 @@ type FolderListResponse struct {
 func (u *Folder) ToResponse() *FolderResponse {
 	return &FolderResponse{
 		ID:          u.ID,
-		AccountID:   u.AccountID,
 		Name:        u.Name,
 		Description: u.Description,
 		CreatedAt:   u.CreatedAt,

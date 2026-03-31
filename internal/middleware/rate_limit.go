@@ -67,11 +67,10 @@ func RateLimitMiddleware(requestsPerSecond float64, burst int) gin.HandlerFunc {
 	rateLimiter.cleanupOldLimiters()
 
 	return func(c *gin.Context) {
-		// Use account_id from context as the client identifier for rate limiting
 		clientID := fmt.Sprintf("ip_%s", c.ClientIP()) // Default fallback
 
-		if accountID, err := contextutils.GetAccountID(c.Request.Context()); err == nil {
-			clientID = fmt.Sprintf("account_%d", accountID)
+		if userID, err := contextutils.GetUserID(c.Request.Context()); err == nil {
+			clientID = fmt.Sprintf("user_%s", userID)
 		}
 
 		limiter := rateLimiter.getLimiter(clientID)

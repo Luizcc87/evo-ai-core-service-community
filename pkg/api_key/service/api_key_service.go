@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	errorsPostgres "evo-ai-core-service/internal/infra/postgres"
-	"evo-ai-core-service/internal/utils/contextutils"
 	"evo-ai-core-service/pkg/api_key/model"
 	"evo-ai-core-service/pkg/api_key/repository"
 
@@ -13,8 +12,8 @@ import (
 
 type ApiKeyService interface {
 	Create(ctx context.Context, request model.ApiKey) (*model.ApiKey, error)
-	GetByIDAndAccountID(ctx context.Context, id uuid.UUID) (*model.ApiKey, error)
-	ListByAccountID(ctx context.Context, request model.ApiKeyListRequest) (*model.ApiKeyListResponse, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*model.ApiKey, error)
+	List(ctx context.Context, request model.ApiKeyListRequest) (*model.ApiKeyListResponse, error)
 	Update(ctx context.Context, request *model.ApiKey, id uuid.UUID) (*model.ApiKey, error)
 	Delete(ctx context.Context, id uuid.UUID) (bool, error)
 }
@@ -30,12 +29,6 @@ func NewApiKeyService(apiKeyRepository repository.ApiKeyRepository) ApiKeyServic
 }
 
 func (s *apiKeyService) Create(ctx context.Context, request model.ApiKey) (*model.ApiKey, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	request.AccountID = accountID
 	apiKey, err := s.apiKeyRepository.Create(ctx, request)
 
 	if err != nil {
@@ -45,13 +38,8 @@ func (s *apiKeyService) Create(ctx context.Context, request model.ApiKey) (*mode
 	return apiKey, nil
 }
 
-func (s *apiKeyService) GetByIDAndAccountID(ctx context.Context, id uuid.UUID) (*model.ApiKey, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	apiKey, err := s.apiKeyRepository.GetByIDAndAccountID(ctx, id, accountID)
+func (s *apiKeyService) GetByID(ctx context.Context, id uuid.UUID) (*model.ApiKey, error) {
+	apiKey, err := s.apiKeyRepository.GetByID(ctx, id)
 
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.APIKeyErrors)
@@ -60,22 +48,15 @@ func (s *apiKeyService) GetByIDAndAccountID(ctx context.Context, id uuid.UUID) (
 	return apiKey, nil
 }
 
-func (s *apiKeyService) ListByAccountID(ctx context.Context, request model.ApiKeyListRequest) (*model.ApiKeyListResponse, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	request.AccountID = accountID
-
+func (s *apiKeyService) List(ctx context.Context, request model.ApiKeyListRequest) (*model.ApiKeyListResponse, error) {
 	// Get paginated items
-	apiKeys, err := s.apiKeyRepository.ListByAccountID(ctx, request)
+	apiKeys, err := s.apiKeyRepository.List(ctx, request)
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.APIKeyErrors)
 	}
 
 	// Get total count
-	totalItems, err := s.apiKeyRepository.CountByAccountID(ctx, accountID, request.Active)
+	totalItems, err := s.apiKeyRepository.Count(ctx, request.Active)
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.APIKeyErrors)
 	}
@@ -103,12 +84,7 @@ func (s *apiKeyService) ListByAccountID(ctx context.Context, request model.ApiKe
 }
 
 func (s *apiKeyService) Update(ctx context.Context, request *model.ApiKey, id uuid.UUID) (*model.ApiKey, error) {
-	_, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = s.GetByIDAndAccountID(ctx, id)
+	_, err := s.GetByID(ctx, id)
 
 	if err != nil {
 		return nil, errors.New("API key not found")
@@ -124,12 +100,7 @@ func (s *apiKeyService) Update(ctx context.Context, request *model.ApiKey, id uu
 }
 
 func (s *apiKeyService) Delete(ctx context.Context, id uuid.UUID) (bool, error) {
-	_, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	_, err = s.GetByIDAndAccountID(ctx, id)
+	_, err := s.GetByID(ctx, id)
 
 	if err != nil {
 		return false, errors.New("API key not found")

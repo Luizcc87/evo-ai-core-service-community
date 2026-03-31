@@ -12,11 +12,10 @@ import (
 type FolderRepository interface {
 	Create(ctx context.Context, folder model.Folder) (*model.Folder, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Folder, error)
-	ListByAccountID(ctx context.Context, accountId uuid.UUID, page int, pageSize int) ([]*model.Folder, error)
-	CountByAccountID(ctx context.Context, accountId uuid.UUID) (int64, error)
+	List(ctx context.Context, page int, pageSize int) ([]*model.Folder, error)
+	Count(ctx context.Context) (int64, error)
 	Update(ctx context.Context, folder *model.Folder, id uuid.UUID) (*model.Folder, error)
 	Delete(ctx context.Context, id uuid.UUID) (bool, error)
-	GetByIDAndAccountID(ctx context.Context, id uuid.UUID, accountID uuid.UUID) (*model.Folder, error)
 }
 
 type folderRepository struct {
@@ -45,22 +44,20 @@ func (r *folderRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.Fo
 	return &folder, nil
 }
 
-func (r *folderRepository) ListByAccountID(ctx context.Context, accountId uuid.UUID, page int, pageSize int) ([]*model.Folder, error) {
+func (r *folderRepository) List(ctx context.Context, page int, pageSize int) ([]*model.Folder, error) {
 	var folders []*model.Folder
 
-	query := r.db.WithContext(ctx).Where("account_id = ?", accountId)
-
-	if err := query.Offset((page - 1) * pageSize).Limit(pageSize).Find(&folders).Error; err != nil {
+	if err := r.db.WithContext(ctx).Offset((page - 1) * pageSize).Limit(pageSize).Find(&folders).Error; err != nil {
 		return []*model.Folder{}, err
 	}
 
 	return folders, nil
 }
 
-func (r *folderRepository) CountByAccountID(ctx context.Context, accountId uuid.UUID) (int64, error) {
+func (r *folderRepository) Count(ctx context.Context) (int64, error) {
 	var count int64
 
-	if err := r.db.WithContext(ctx).Model(&model.Folder{}).Where("account_id = ?", accountId).Count(&count).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&model.Folder{}).Count(&count).Error; err != nil {
 		return 0, err
 	}
 
@@ -82,14 +79,4 @@ func (r *folderRepository) Delete(ctx context.Context, id uuid.UUID) (bool, erro
 	}
 
 	return true, nil
-}
-
-func (r *folderRepository) GetByIDAndAccountID(ctx context.Context, id uuid.UUID, accountID uuid.UUID) (*model.Folder, error) {
-	var folder model.Folder
-
-	if err := r.db.WithContext(ctx).Where("id = ? AND account_id = ?", id, accountID).First(&folder).Error; err != nil {
-		return nil, err
-	}
-
-	return &folder, nil
 }

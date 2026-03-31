@@ -10,7 +10,6 @@ import (
 
 type CustomMcpServer struct {
 	ID          uuid.UUID      `json:"-" gorm:"<-:create;type:uuid;primary_key;default:uuid_generate_v4()"`
-	AccountID   uuid.UUID      `json:"-" gorm:"<-:create;not null;type:uuid"` // Removed foreign key reference to external accounts table
 	Name        string         `json:"-" gorm:"not null; type:varchar(255)"`
 	Description string         `json:"-" gorm:"type:text"`
 	URL         string         `json:"-" gorm:"not null; type:varchar(1024)"`
@@ -48,7 +47,6 @@ type CustomMcpServerUpdateRequest struct {
 
 type CustomMcpServerResponse struct {
 	ID          uuid.UUID                `json:"id"`
-	AccountID   uuid.UUID                `json:"account_id"`
 	Name        string                   `json:"name"`
 	Description string                   `json:"description"`
 	URL         string                   `json:"url"`
@@ -76,11 +74,10 @@ type CustomMcpServerTestResponse struct {
 }
 
 type CustomMcpServerListRequest struct {
-	AccountID uuid.UUID `json:"-" binding:"required"`
-	Page      int       `json:"-" binding:"required"`
-	PageSize  int       `json:"-" binding:"required"`
-	Search    string    `json:"-" binding:"required"`
-	Tags      string    `json:"-"`
+	Page     int    `json:"-" binding:"required"`
+	PageSize int    `json:"-" binding:"required"`
+	Search   string `json:"-" binding:"required"`
+	Tags     string `json:"-"`
 }
 
 type CustomMcpServerToolsResponse struct {
@@ -100,7 +97,6 @@ type CustomMcpServerListResponse struct {
 func (u *CustomMcpServer) ToResponse() *CustomMcpServerResponse {
 	return &CustomMcpServerResponse{
 		ID:          u.ID,
-		AccountID:   u.AccountID,
 		Name:        u.Name,
 		Description: u.Description,
 		URL:         u.URL,

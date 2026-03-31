@@ -12,9 +12,9 @@ import (
 
 type AgentIntegrationRepository interface {
 	Upsert(ctx context.Context, integration model.AgentIntegration) (*model.AgentIntegration, error)
-	GetByAccountAgentAndProvider(ctx context.Context, accountID, agentID uuid.UUID, provider string) (*model.AgentIntegration, error)
-	ListByAccountAndAgent(ctx context.Context, accountID, agentID uuid.UUID) ([]*model.AgentIntegration, error)
-	Delete(ctx context.Context, accountID, agentID uuid.UUID, provider string) error
+	GetByAgentAndProvider(ctx context.Context, agentID uuid.UUID, provider string) (*model.AgentIntegration, error)
+	ListByAgent(ctx context.Context, agentID uuid.UUID) ([]*model.AgentIntegration, error)
+	Delete(ctx context.Context, agentID uuid.UUID, provider string) error
 }
 
 type agentIntegrationRepository struct {
@@ -30,7 +30,7 @@ func (r *agentIntegrationRepository) Upsert(ctx context.Context, integration mod
 
 	// Use GORM's upsert functionality
 	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "account_id"}, {Name: "agent_id"}, {Name: "provider"}},
+		Columns:   []clause.Column{{Name: "agent_id"}, {Name: "provider"}},
 		DoUpdates: clause.AssignmentColumns([]string{"config", "updated_at"}),
 	}).Create(&integration).Error
 
@@ -41,11 +41,11 @@ func (r *agentIntegrationRepository) Upsert(ctx context.Context, integration mod
 	return &integration, nil
 }
 
-func (r *agentIntegrationRepository) GetByAccountAgentAndProvider(ctx context.Context, accountID, agentID uuid.UUID, provider string) (*model.AgentIntegration, error) {
+func (r *agentIntegrationRepository) GetByAgentAndProvider(ctx context.Context, agentID uuid.UUID, provider string) (*model.AgentIntegration, error) {
 	var integration model.AgentIntegration
 
 	err := r.db.WithContext(ctx).
-		Where("account_id = ? AND agent_id = ? AND provider = ?", accountID, agentID, provider).
+		Where("agent_id = ? AND provider = ?", agentID, provider).
 		First(&integration).Error
 
 	if err != nil {
@@ -55,11 +55,11 @@ func (r *agentIntegrationRepository) GetByAccountAgentAndProvider(ctx context.Co
 	return &integration, nil
 }
 
-func (r *agentIntegrationRepository) ListByAccountAndAgent(ctx context.Context, accountID, agentID uuid.UUID) ([]*model.AgentIntegration, error) {
+func (r *agentIntegrationRepository) ListByAgent(ctx context.Context, agentID uuid.UUID) ([]*model.AgentIntegration, error) {
 	var integrations []*model.AgentIntegration
 
 	err := r.db.WithContext(ctx).
-		Where("account_id = ? AND agent_id = ?", accountID, agentID).
+		Where("agent_id = ?", agentID).
 		Find(&integrations).Error
 
 	if err != nil {
@@ -69,8 +69,8 @@ func (r *agentIntegrationRepository) ListByAccountAndAgent(ctx context.Context, 
 	return integrations, nil
 }
 
-func (r *agentIntegrationRepository) Delete(ctx context.Context, accountID, agentID uuid.UUID, provider string) error {
+func (r *agentIntegrationRepository) Delete(ctx context.Context, agentID uuid.UUID, provider string) error {
 	return r.db.WithContext(ctx).
-		Where("account_id = ? AND agent_id = ? AND provider = ?", accountID, agentID, provider).
+		Where("agent_id = ? AND provider = ?", agentID, provider).
 		Delete(&model.AgentIntegration{}).Error
 }

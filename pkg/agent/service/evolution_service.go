@@ -19,7 +19,7 @@ type EvolutionService interface {
 	DeleteAgentBot(ctx context.Context, agent *model.Agent) error
 	DeleteAgentBotSafe(ctx context.Context, agent *model.Agent) error
 	SyncAgentBot(ctx context.Context, agent *model.Agent, aiProcessorURL string) (*evolution.AgentBot, error)
-	CleanupEvolutionBot(ctx context.Context, accountID uuid.UUID, botID uuid.UUID)
+	CleanupEvolutionBot(ctx context.Context, botID uuid.UUID)
 }
 
 type evolutionService struct {
@@ -56,7 +56,6 @@ func (s *evolutionService) CreateAgentBot(ctx context.Context, agent *model.Agen
 
 	evolutionBot, err := s.evolutionClient.CreateAgentBot(
 		ctx,
-		agent.AccountID,
 		agent.ID,
 		agent.Name,
 		agent.Description,
@@ -102,7 +101,6 @@ func (s *evolutionService) UpdateAgentBot(ctx context.Context, agent *model.Agen
 
 	evolutionBot, err := s.evolutionClient.UpdateAgentBot(
 		ctx,
-		agent.AccountID,
 		*agent.EvolutionBotID,
 		agent.ID,
 		agent.Name,
@@ -131,7 +129,7 @@ func (s *evolutionService) DeleteAgentBot(ctx context.Context, agent *model.Agen
 		return fmt.Errorf("failed to get Bearer token: %w", err)
 	}
 
-	err = s.evolutionClient.DeleteAgentBot(ctx, agent.AccountID, *agent.EvolutionBotID, token)
+	err = s.evolutionClient.DeleteAgentBot(ctx, *agent.EvolutionBotID, token)
 	if err != nil {
 		log.Printf("Failed to delete Evolution bot %s for agent %s: %v", *agent.EvolutionBotID, agent.ID, err)
 		return fmt.Errorf("failed to delete Evolution bot %s: %w", *agent.EvolutionBotID, err)
@@ -153,7 +151,7 @@ func (s *evolutionService) DeleteAgentBotSafe(ctx context.Context, agent *model.
 		bearerToken = token
 	}
 
-	err := s.evolutionClient.DeleteAgentBot(ctx, agent.AccountID, *agent.EvolutionBotID, bearerToken)
+	err := s.evolutionClient.DeleteAgentBot(ctx, *agent.EvolutionBotID, bearerToken)
 	if err != nil {
 		log.Printf("Safe delete - Failed to delete Evolution bot %s for agent %s: %v", *agent.EvolutionBotID, agent.ID, err)
 		// In safe mode, we don't return the error to allow agent deletion to proceed
@@ -190,7 +188,7 @@ func (s *evolutionService) getAgentAPIKey(agent *model.Agent) (string, error) {
 	return "evo-ai-bot-" + agent.ID.String(), nil
 }
 
-func (s *evolutionService) CleanupEvolutionBot(ctx context.Context, accountID uuid.UUID, botID uuid.UUID) {
+func (s *evolutionService) CleanupEvolutionBot(ctx context.Context, botID uuid.UUID) {
 	// Get Bearer token from context (best effort for cleanup)
 	bearerToken, err := contextutils.GetToken(ctx)
 	if err != nil {
@@ -198,7 +196,7 @@ func (s *evolutionService) CleanupEvolutionBot(ctx context.Context, accountID uu
 		return
 	}
 
-	err = s.evolutionClient.DeleteAgentBot(ctx, accountID, botID, bearerToken)
+	err = s.evolutionClient.DeleteAgentBot(ctx, botID, bearerToken)
 	if err != nil {
 		log.Printf("Failed to cleanup Evolution bot %s: %v", botID, err)
 	}

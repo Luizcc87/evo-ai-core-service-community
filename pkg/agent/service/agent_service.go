@@ -7,7 +7,6 @@ import (
 	"log"
 
 	errorsPostgres "evo-ai-core-service/internal/infra/postgres"
-	"evo-ai-core-service/internal/utils/contextutils"
 	"evo-ai-core-service/internal/utils/stringutils"
 	"evo-ai-core-service/pkg/agent/client/a2a"
 	"evo-ai-core-service/pkg/agent/model"
@@ -29,8 +28,7 @@ import (
 type AgentService interface {
 	Create(ctx context.Context, request model.Agent) (*model.Agent, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Agent, error)
-	GetByIDAndAccountID(ctx context.Context, id uuid.UUID) (*model.Agent, error)
-	ListByAccountID(ctx context.Context, page int, pageSize int) (*model.AgentListResponse, error)
+	List(ctx context.Context, page int, pageSize int) (*model.AgentListResponse, error)
 	Update(ctx context.Context, request *model.Agent, id uuid.UUID) (*model.Agent, error)
 	Delete(ctx context.Context, id uuid.UUID) (bool, error)
 	ImportAgents(ctx context.Context, request model.AgentImportRequest) ([]*model.AgentResponse, error)
@@ -98,15 +96,7 @@ func NewAgentService(
 	}
 }
 
-
 func (s *agentService) Create(ctx context.Context, request model.Agent) (*model.Agent, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	request.AccountID = accountID
-
 	if err := s.validateCreate(ctx, &request); err != nil {
 		return nil, errors.New("Validation failed for agent: " + err.Error())
 	}
@@ -132,7 +122,7 @@ func (s *agentService) Create(ctx context.Context, request model.Agent) (*model.
 		agent, err = s.agentRepository.Update(ctx, agent, agent.ID)
 
 		if err != nil {
-			s.evolutionService.CleanupEvolutionBot(ctx, agent.AccountID, *agent.EvolutionBotID)
+			s.evolutionService.CleanupEvolutionBot(ctx, *agent.EvolutionBotID)
 			return nil, errorsPostgres.MapDBError(err, model.AgentErrors)
 		}
 	}
@@ -146,13 +136,13 @@ func (s *agentService) validateCreate(ctx context.Context, request *model.Agent)
 
 func (s *agentService) validateRelatedEntities(ctx context.Context, request *model.Agent, isCreate bool) error {
 	if request.FolderID != nil {
-		if _, err := s.folderService.GetByIDAndAccountID(ctx, *request.FolderID); err != nil {
+		if _, err := s.folderService.GetByID(ctx, *request.FolderID); err != nil {
 			return err
 		}
 	}
 
 	if request.ApiKeyID != nil {
-		if _, err := s.apiKeyService.GetByIDAndAccountID(ctx, *request.ApiKeyID); err != nil {
+		if _, err := s.apiKeyService.GetByID(ctx, *request.ApiKeyID); err != nil {
 			return err
 		}
 	}
@@ -188,17 +178,11 @@ func (s *agentService) processAgentCreate(ctx context.Context, request *model.Ag
 }
 
 func (s *agentService) Update(ctx context.Context, request *model.Agent, id uuid.UUID) (*model.Agent, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	current, err := s.GetByIDAndAccountID(ctx, id)
+	current, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, errors.New("Failed to get current agent")
 	}
 
-	request.AccountID = accountID
 	if err := s.validateRelatedEntities(ctx, request, false); err != nil {
 		return nil, errors.New("Validation failed: " + err.Error())
 	}
@@ -287,12 +271,11 @@ func (s *agentService) reconstructCustomConfigurations(ctx context.Context, agen
 
 			if len(toolIDs) > 0 {
 				req := customToolModel.CustomToolListRequest{
-					AccountID: agent.AccountID,
-					Page:      1,
-					PageSize:  100,
-					Search:    "",
+					Page:     1,
+					PageSize: 100,
+					Search:   "",
 				}
-				tools, err := s.customToolService.ListByAccountID(ctx, req)
+				tools, err := s.customToolService.List(ctx, req)
 				if err != nil {
 					log.Printf("Error getting custom tools for agent %s: %v", agent.ID, err)
 				} else {
@@ -330,7 +313,7 @@ func (s *agentService) reconstructCustomConfigurations(ctx context.Context, agen
 			}
 
 			if len(mcpServerIDs) > 0 {
-				servers, err := s.customMCPServerService.GetByAgentConfig(ctx, agent.AccountID, mcpServerIDs)
+				servers, err := s.customMCPServerService.GetByAgentConfig(ctx, mcpServerIDs)
 				if err != nil {
 					log.Printf("Error getting custom MCP servers for agent %s: %v", agent.ID, err)
 				} else {
@@ -453,32 +436,13 @@ func (s *agentService) GetByID(ctx context.Context, id uuid.UUID) (*model.Agent,
 	return agent, nil
 }
 
-func (s *agentService) GetByIDAndAccountID(ctx context.Context, id uuid.UUID) (*model.Agent, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	agent, err := s.agentRepository.GetByIDAndAccountID(ctx, id, accountID)
+func (s *agentService) List(ctx context.Context, page int, pageSize int) (*model.AgentListResponse, error) {
+	agents, err := s.agentRepository.List(ctx, page, pageSize)
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.AgentErrors)
 	}
 
-	return agent, nil
-}
-
-func (s *agentService) ListByAccountID(ctx context.Context, page int, pageSize int) (*model.AgentListResponse, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	agents, err := s.agentRepository.ListByAccountID(ctx, accountID, page, pageSize)
-	if err != nil {
-		return nil, errorsPostgres.MapDBError(err, model.AgentErrors)
-	}
-
-	totalItems, err := s.agentRepository.CountByAccountID(ctx, accountID)
+	totalItems, err := s.agentRepository.Count(ctx)
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.AgentErrors)
 	}
@@ -516,7 +480,7 @@ func (s *agentService) ListByAccountID(ctx context.Context, page int, pageSize i
 }
 
 func (s *agentService) Delete(ctx context.Context, id uuid.UUID) (bool, error) {
-	agent, err := s.GetByIDAndAccountID(ctx, id)
+	agent, err := s.GetByID(ctx, id)
 	if err != nil {
 		return false, err
 	}
@@ -573,14 +537,9 @@ func (s *agentService) GetSharedAgent(ctx context.Context, id uuid.UUID, apiKey 
 }
 
 func (s *agentService) GetShareAgent(ctx context.Context, id uuid.UUID) (string, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
+	agent, err := s.agentRepository.GetByID(ctx, id)
 	if err != nil {
-		return "", err
-	}
-
-	agent, err := s.agentRepository.GetByIDAndAccountID(ctx, id, accountID)
-	if err != nil {
-		return "", errors.New("Agent does not belong to the specified account")
+		return "", errors.New("Agent not found")
 	}
 
 	config := stringutils.JSONToInterfaceMap(agent.Config)
@@ -594,19 +553,14 @@ func (s *agentService) GetShareAgent(ctx context.Context, id uuid.UUID) (string,
 }
 
 func (s *agentService) ImportAgents(ctx context.Context, request model.AgentImportRequest) ([]*model.AgentResponse, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	if request.FolderID != nil {
-		_, err := s.folderService.GetByIDAndAccountID(ctx, *request.FolderID)
+		_, err := s.folderService.GetByID(ctx, *request.FolderID)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	agentsData, err := s.ImportAgentsFromJSON(ctx, request, accountID)
+	agentsData, err := s.ImportAgentsFromJSON(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -620,7 +574,7 @@ func (s *agentService) ImportAgents(ctx context.Context, request model.AgentImpo
 	return responses, nil
 }
 
-func (s *agentService) ImportAgentsFromJSON(ctx context.Context, request model.AgentImportRequest, accountID uuid.UUID) ([]*model.Agent, error) {
+func (s *agentService) ImportAgentsFromJSON(ctx context.Context, request model.AgentImportRequest) ([]*model.Agent, error) {
 	folderID := request.FolderID
 	agentsData := request.AgentData
 
@@ -628,8 +582,7 @@ func (s *agentService) ImportAgentsFromJSON(ctx context.Context, request model.A
 
 	for _, data := range agentsData {
 		agent := &model.Agent{
-			AccountID: accountID,
-			FolderID:  folderID,
+			FolderID: folderID,
 		}
 
 		name, ok := data["name"].(string)
@@ -690,14 +643,9 @@ func (s *agentService) ImportAgentsFromJSON(ctx context.Context, request model.A
 }
 
 func (s *agentService) AssignFolder(ctx context.Context, id uuid.UUID, request *model.Agent) (*model.Agent, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
+	agent, err := s.agentRepository.GetByID(ctx, id)
 	if err != nil {
-		return nil, err
-	}
-
-	agent, err := s.agentRepository.GetByIDAndAccountID(ctx, id, accountID)
-	if err != nil {
-		return nil, errors.New("Agent does not belong to the specified account")
+		return nil, errors.New("Agent not found")
 	}
 
 	if request.FolderID == nil {
@@ -709,9 +657,9 @@ func (s *agentService) AssignFolder(ctx context.Context, id uuid.UUID, request *
 		return agent, nil
 	}
 
-	_, err = s.folderService.GetByIDAndAccountID(ctx, *request.FolderID)
+	_, err = s.folderService.GetByID(ctx, *request.FolderID)
 	if err != nil {
-		return nil, errors.New("Folder does not belong to the specified account")
+		return nil, errors.New("Folder not found")
 	}
 
 	agent, err = s.agentRepository.Update(ctx, request, id)
@@ -723,23 +671,18 @@ func (s *agentService) AssignFolder(ctx context.Context, id uuid.UUID, request *
 }
 
 func (s *agentService) ListAgentsByFolderID(ctx context.Context, folderId uuid.UUID, page int, pageSize int) (*model.AgentListResponse, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
+	_, err := s.folderService.GetByID(ctx, folderId)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("Folder not found")
 	}
 
-	_, err = s.folderService.GetByIDAndAccountID(ctx, folderId)
-	if err != nil {
-		return nil, errors.New("Folder does not belong to the specified account")
-	}
-
-	agents, err := s.agentRepository.ListAgentsByFolderID(ctx, folderId, accountID, page, pageSize)
+	agents, err := s.agentRepository.ListAgentsByFolderID(ctx, folderId, page, pageSize)
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.AgentErrors)
 	}
 
 	// Get total count for the folder
-	totalItems, err := s.agentRepository.CountByAccountID(ctx, accountID)
+	totalItems, err := s.agentRepository.CountByFolderID(ctx, folderId)
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.AgentErrors)
 	}
@@ -794,7 +737,6 @@ func (s *agentService) ListReadAgents(ctx context.Context, request *model.AgentR
 			// Create basic agent from response data
 			agent := &model.Agent{
 				ID:               agentResp.ID,
-				AccountID:        agentResp.AccountID,
 				Name:             agentResp.Name,
 				Description:      agentResp.Description,
 				Type:             agentResp.Type,
@@ -822,7 +764,7 @@ func (s *agentService) ListReadAgents(ctx context.Context, request *model.AgentR
 		return agents, nil
 	}
 
-	agentsResponse, err := s.ListByAccountID(ctx, request.Page, request.PageSize)
+	agentsResponse, err := s.List(ctx, request.Page, request.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -833,7 +775,6 @@ func (s *agentService) ListReadAgents(ctx context.Context, request *model.AgentR
 		// Create basic agent from response data
 		agent := &model.Agent{
 			ID:               agentResp.ID,
-			AccountID:        agentResp.AccountID,
 			Name:             agentResp.Name,
 			Description:      agentResp.Description,
 			Type:             agentResp.Type,
@@ -862,7 +803,7 @@ func (s *agentService) ListReadAgents(ctx context.Context, request *model.AgentR
 }
 
 func (s *agentService) SyncEvolutionBot(ctx context.Context, id uuid.UUID) (*model.Agent, error) {
-	agent, err := s.GetByIDAndAccountID(ctx, id)
+	agent, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}

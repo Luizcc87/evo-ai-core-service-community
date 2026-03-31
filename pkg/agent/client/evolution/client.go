@@ -72,7 +72,6 @@ type AgentBot struct {
 	BotProvider             string                 `json:"bot_provider"`
 	BotConfig               map[string]interface{} `json:"bot_config"`
 	AvatarURL               string                 `json:"avatar_url,omitempty"`
-	AccountID               uuid.UUID              `json:"account_id"`
 	AccessToken             string                 `json:"access_token,omitempty"`
 	SystemBot               bool                   `json:"system_bot,omitempty"`
 	CreatedAt               time.Time              `json:"created_at"`
@@ -111,8 +110,7 @@ func (r *AgentBotRequest) toMap() map[string]interface{} {
 	return stringutils.JSONToInterfaceMap(jsonStr)
 }
 
-func (c *Client) CreateAgentBot(ctx context.Context, accountID uuid.UUID, agentID uuid.UUID, agentName, agentDescription, aiProcessorURL, apiKey string, advancedConfig *AdvancedBotConfig, bearerToken string) (*AgentBot, error) {
-	// Use new standard: /api/v1/agent_bots with account-id header
+func (c *Client) CreateAgentBot(ctx context.Context, agentID uuid.UUID, agentName, agentDescription, aiProcessorURL, apiKey string, advancedConfig *AdvancedBotConfig, bearerToken string) (*AgentBot, error) {
 	url := fmt.Sprintf("%s/api/v1/agent_bots", c.baseURL)
 
 	outgoingURL := fmt.Sprintf("%s/api/v1/a2a/%s", aiProcessorURL, agentID)
@@ -203,8 +201,7 @@ func (c *Client) CreateAgentBot(ctx context.Context, accountID uuid.UUID, agentI
 	return agentBot, nil
 }
 
-func (c *Client) DeleteAgentBot(ctx context.Context, accountID uuid.UUID, agentBotID uuid.UUID, bearerToken string) error {
-	// Use new standard: /api/v1/agent_bots/{botID} with account-id header
+func (c *Client) DeleteAgentBot(ctx context.Context, agentBotID uuid.UUID, bearerToken string) error {
 	url := fmt.Sprintf("%s/api/v1/agent_bots/%s", c.baseURL, agentBotID)
 
 	// Prepare headers with Bearer token
@@ -226,8 +223,7 @@ func (c *Client) DeleteAgentBot(ctx context.Context, accountID uuid.UUID, agentB
 	return nil
 }
 
-func (c *Client) UpdateAgentBot(ctx context.Context, accountID uuid.UUID, agentBotID uuid.UUID, agentID uuid.UUID, agentName, agentDescription, aiProcessorURL, apiKey string, advancedConfig *AdvancedBotConfig, bearerToken string) (*AgentBot, error) {
-	// Use new standard: /api/v1/agent_bots/{botID} with account-id header
+func (c *Client) UpdateAgentBot(ctx context.Context, agentBotID uuid.UUID, agentID uuid.UUID, agentName, agentDescription, aiProcessorURL, apiKey string, advancedConfig *AdvancedBotConfig, bearerToken string) (*AgentBot, error) {
 	url := fmt.Sprintf("%s/api/v1/agent_bots/%s", c.baseURL, agentBotID)
 
 	outgoingURL := fmt.Sprintf("%s/api/v1/a2a/%s", aiProcessorURL, agentID)

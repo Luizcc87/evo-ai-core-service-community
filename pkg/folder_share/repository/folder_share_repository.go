@@ -10,7 +10,6 @@ import (
 
 type FolderShareRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*model.FolderShare, error)
-	GetByIDAndAccountID(ctx context.Context, id uuid.UUID, accountID uuid.UUID) (*model.FolderShare, error)
 	GetByFolderIDAndSharedWithEmail(ctx context.Context, folderID uuid.UUID, sharedWithEmail string) (*model.FolderShare, error)
 	Create(ctx context.Context, folderShare model.FolderShare) (*model.FolderShare, error)
 	Update(ctx context.Context, id uuid.UUID, folderShare *model.FolderShare) (*model.FolderShare, error)
@@ -33,15 +32,6 @@ func NewFolderShareRepository(db *gorm.DB) FolderShareRepository {
 func (r *folderShareRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.FolderShare, error) {
 	var folderShare model.FolderShare
 	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&folderShare).Error; err != nil {
-		return nil, err
-	}
-
-	return &folderShare, nil
-}
-
-func (r *folderShareRepository) GetByIDAndAccountID(ctx context.Context, id uuid.UUID, accountID uuid.UUID) (*model.FolderShare, error) {
-	var folderShare model.FolderShare
-	if err := r.db.WithContext(ctx).Where("id = ? AND account_id = ?", id, accountID).First(&folderShare).Error; err != nil {
 		return nil, err
 	}
 

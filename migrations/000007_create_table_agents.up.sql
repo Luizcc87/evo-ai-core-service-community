@@ -1,6 +1,5 @@
 CREATE TABLE IF NOT EXISTS evo_core_agents (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    account_id UUID NOT NULL, -- Removed foreign key reference to external accounts table
     name VARCHAR(255) NOT NULL,
     description     TEXT,
     type            VARCHAR(10) NOT NULL,
@@ -58,40 +57,15 @@ BEGIN
         SELECT 1
         FROM information_schema.columns
         WHERE table_name = 'evo_core_agents'
-        AND column_name = 'account_id'
-    ) THEN
-        IF NOT EXISTS (
-            SELECT 1
-            FROM pg_indexes
-            WHERE tablename = 'evo_core_agents'
-            AND indexname = 'idx_evo_core_agents_account_id'
-        ) THEN
-            CREATE INDEX idx_evo_core_agents_account_id ON evo_core_agents (account_id);
-        END IF;
-    END IF;
-
-    IF EXISTS (
-        SELECT 1
-        FROM information_schema.tables
-        WHERE table_name = 'evo_core_agents'
-    ) AND EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_name = 'evo_core_agents'
         AND column_name = 'name'
-    ) AND EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_name = 'evo_core_agents'
-        AND column_name = 'account_id'
     ) THEN
         IF NOT EXISTS (
             SELECT 1
             FROM pg_indexes
             WHERE tablename = 'evo_core_agents'
-            AND indexname = 'idx_evo_core_agents_name_account_id'
+            AND indexname = 'idx_evo_core_agents_name_unique'
         ) THEN
-            CREATE UNIQUE INDEX idx_evo_core_agents_name_account_id ON evo_core_agents (name, account_id);
+            CREATE UNIQUE INDEX idx_evo_core_agents_name_unique ON evo_core_agents (name);
         END IF;
     END IF;
 END

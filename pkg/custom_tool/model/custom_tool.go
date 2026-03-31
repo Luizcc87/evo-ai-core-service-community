@@ -10,7 +10,6 @@ import (
 
 type CustomTool struct {
 	ID            uuid.UUID      `json:"-" gorm:"<-:create;type:uuid;primary_key;default:uuid_generate_v4()"`
-	AccountID     uuid.UUID      `json:"-" gorm:"<-:create;not null;type:uuid"` // Removed foreign key reference to external accounts table
 	Name          string         `json:"-" gorm:"not null; type:varchar(255)"`
 	Description   string         `json:"-" gorm:"type:text"`
 	Method        string         `json:"-" gorm:"not null; type:varchar(10)"`
@@ -60,7 +59,6 @@ type CustomToolUpdateRequest struct {
 
 type CustomToolResponse struct {
 	ID            uuid.UUID              `json:"id"`
-	AccountID     uuid.UUID              `json:"account_id"`
 	Name          string                 `json:"name"`
 	Description   string                 `json:"description"`
 	Method        string                 `json:"method"`
@@ -80,11 +78,10 @@ type CustomToolResponse struct {
 }
 
 type CustomToolListRequest struct {
-	AccountID uuid.UUID `json:"-" binding:"required"`
-	Page      int       `json:"-" binding:"required"`
-	PageSize  int       `json:"-" binding:"required"`
-	Search    string    `json:"-" binding:"required"`
-	Tags      string    `json:"-"`
+	Page     int    `json:"-" binding:"required"`
+	PageSize int    `json:"-" binding:"required"`
+	Search   string `json:"-" binding:"required"`
+	Tags     string `json:"-"`
 }
 
 type TestResult struct {
@@ -113,7 +110,6 @@ type CustomToolListResponse struct {
 func (u *CustomTool) ToResponse() *CustomToolResponse {
 	return &CustomToolResponse{
 		ID:            u.ID,
-		AccountID:     u.AccountID,
 		Name:          u.Name,
 		Description:   u.Description,
 		Method:        u.Method,

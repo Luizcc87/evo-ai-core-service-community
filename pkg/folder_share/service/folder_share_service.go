@@ -14,7 +14,6 @@ import (
 
 type FolderShareService interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*model.FolderShare, error)
-	GetByIDAndAccountID(ctx context.Context, id uuid.UUID) (*model.FolderShare, error)
 	Create(ctx context.Context, request model.FolderShare) (*model.FolderShare, error)
 	Update(ctx context.Context, id uuid.UUID, request *model.FolderShare) (*model.FolderShare, error)
 	Delete(ctx context.Context, id uuid.UUID) (bool, error)
@@ -47,23 +46,8 @@ func (s *folderShareService) GetByID(ctx context.Context, id uuid.UUID) (*model.
 	return folderShare, nil
 }
 
-func (s *folderShareService) GetByIDAndAccountID(ctx context.Context, id uuid.UUID) (*model.FolderShare, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	folderShare, err := s.folderShareRepository.GetByIDAndAccountID(ctx, id, accountID)
-
-	if err != nil {
-		return nil, errorsPostgres.MapDBError(err, model.FolderShareErrors)
-	}
-
-	return folderShare, nil
-}
-
 func (s *folderShareService) Create(ctx context.Context, request model.FolderShare) (*model.FolderShare, error) {
-	_, err := s.folderService.GetByIDAndAccountID(ctx, request.FolderID)
+	_, err := s.folderService.GetByID(ctx, request.FolderID)
 
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.FolderShareErrors)
@@ -102,14 +86,14 @@ func (s *folderShareService) Create(ctx context.Context, request model.FolderSha
 }
 
 func (s *folderShareService) Update(ctx context.Context, id uuid.UUID, request *model.FolderShare) (*model.FolderShare, error) {
-	folderShare, err := s.GetByIDAndAccountID(ctx, id)
+	folderShare, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = s.folderService.GetByIDAndAccountID(ctx, folderShare.FolderID)
+	_, err = s.folderService.GetByID(ctx, folderShare.FolderID)
 	if err != nil {
-		return nil, errors.New("Share does not belong to the specified client")
+		return nil, errors.New("Share references a folder that no longer exists")
 	}
 
 	folderShare, err = s.folderShareRepository.Update(ctx, id, request)
@@ -122,7 +106,7 @@ func (s *folderShareService) Update(ctx context.Context, id uuid.UUID, request *
 }
 
 func (s *folderShareService) Delete(ctx context.Context, id uuid.UUID) (bool, error) {
-	_, err := s.GetByIDAndAccountID(ctx, id)
+	_, err := s.GetByID(ctx, id)
 
 	if err != nil {
 		return false, err
@@ -138,9 +122,9 @@ func (s *folderShareService) Delete(ctx context.Context, id uuid.UUID) (bool, er
 }
 
 func (s *folderShareService) GetSharedFolder(ctx context.Context, folderId uuid.UUID, page int, pageSize int) (*model.FolderShareListResponse, error) {
-	_, err := s.folderService.GetByIDAndAccountID(ctx, folderId)
+	_, err := s.folderService.GetByID(ctx, folderId)
 	if err != nil {
-		return nil, errors.New("Folder does not belong to the specified client")
+		return nil, errors.New("Folder not found")
 	}
 
 	sharedFolders, err := s.folderShareRepository.GetSharedFolder(ctx, folderId, page, pageSize)
@@ -215,11 +199,6 @@ func (s *folderShareService) ListSharedFolders(ctx context.Context, page int, pa
 		return nil, err
 	}
 
-	accountId, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	// Get owned folders
 	ownedFolders, err := s.folderService.ListOwnedFolders(ctx, page, pageSize)
 	if err != nil {
@@ -236,14 +215,13 @@ func (s *folderShareService) ListSharedFolders(ctx context.Context, page int, pa
 	for i, share := range sharedFolders {
 		sharedFoldersResponse[i] = &model.FolderWithSharingResponse{
 			ID:              share.FolderID,
-			AccountID:       accountId,
 			Name:            share.Folder.Name,
 			Description:     share.Folder.Description,
 			CreatedAt:       share.Folder.CreatedAt,
 			UpdatedAt:       share.Folder.UpdatedAt,
 			IsShared:        true,
 			PermissionLevel: share.PermissionLevel,
-			SharedBy:        &email,
+			SharedBy:        nil,
 			ShareID:         &share.ID,
 		}
 	}
@@ -289,17 +267,15 @@ func (s *folderShareService) ListSharedFoldersByEmail(ctx context.Context, page 
 	result := make([]*model.FolderWithSharingResponse, 0)
 
 	for _, share := range sharedFolders {
-		sharedByEmail := share.SharedWithEmail
 		result = append(result, &model.FolderWithSharingResponse{
 			ID:              share.FolderID,
-			AccountID:       share.Folder.AccountID,
 			Name:            share.Folder.Name,
 			Description:     share.Folder.Description,
 			CreatedAt:       share.Folder.CreatedAt,
 			UpdatedAt:       share.Folder.UpdatedAt,
 			IsShared:        true,
 			PermissionLevel: share.PermissionLevel,
-			SharedBy:        &sharedByEmail,
+			SharedBy:        nil,
 			ShareID:         &share.ID,
 		})
 	}
@@ -313,7 +289,7 @@ func (s *folderShareService) CheckFolderAccess(
 	email string,
 	requiredPermission string,
 ) (bool, error) {
-	_, err := s.folderService.GetByIDAndAccountID(ctx, folderID)
+	_, err := s.folderService.GetByID(ctx, folderID)
 	if err != nil {
 		return false, nil
 	}

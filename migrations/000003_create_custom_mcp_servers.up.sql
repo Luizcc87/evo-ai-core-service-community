@@ -1,6 +1,5 @@
 CREATE TABLE IF NOT EXISTS evo_core_custom_mcp_servers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    account_id UUID NOT NULL, -- Removed foreign key reference to external accounts table
     name VARCHAR(255) NOT NULL,
     description TEXT,
     url VARCHAR(1024) NOT NULL,
@@ -64,40 +63,15 @@ BEGIN
         SELECT 1
         FROM information_schema.columns
         WHERE table_name = 'evo_core_custom_mcp_servers'
-        AND column_name = 'account_id'
-    ) THEN
-        IF NOT EXISTS (
-            SELECT 1
-            FROM pg_indexes
-            WHERE tablename = 'evo_core_custom_mcp_servers'
-            AND indexname = 'idx_evo_core_custom_mcp_servers_account_id'
-        ) THEN
-            CREATE INDEX idx_evo_core_custom_mcp_servers_account_id ON evo_core_custom_mcp_servers (account_id);
-        END IF;
-    END IF;
-
-    IF EXISTS (
-        SELECT 1
-        FROM information_schema.tables
-        WHERE table_name = 'evo_core_custom_mcp_servers'
-    ) AND EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_name = 'evo_core_custom_mcp_servers'
-        AND column_name = 'account_id'
-    ) AND EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_name = 'evo_core_custom_mcp_servers'
         AND column_name = 'name'
     ) THEN
         IF NOT EXISTS (
             SELECT 1
             FROM pg_indexes
             WHERE tablename = 'evo_core_custom_mcp_servers'
-            AND indexname = 'idx_evo_core_custom_mcp_servers_account_id_name'
+            AND indexname = 'idx_evo_core_custom_mcp_servers_name_unique'
         ) THEN
-            CREATE UNIQUE INDEX idx_evo_core_custom_mcp_servers_account_id_name ON evo_core_custom_mcp_servers (account_id, name);
+            CREATE UNIQUE INDEX idx_evo_core_custom_mcp_servers_name_unique ON evo_core_custom_mcp_servers (name);
         END IF;
     END IF;
 END

@@ -12,13 +12,13 @@ import (
 type AgentRepository interface {
 	Create(ctx context.Context, agent model.Agent) (*model.Agent, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Agent, error)
-	ListByAccountID(ctx context.Context, accountID uuid.UUID, page int, pageSize int) ([]*model.Agent, error)
+	List(ctx context.Context, page int, pageSize int) ([]*model.Agent, error)
 	Update(ctx context.Context, agent *model.Agent, id uuid.UUID) (*model.Agent, error)
 	Delete(ctx context.Context, id uuid.UUID) (bool, error)
-	CountByAccountID(ctx context.Context, accountID uuid.UUID) (int64, error)
+	Count(ctx context.Context) (int64, error)
+	CountByFolderID(ctx context.Context, folderId uuid.UUID) (int64, error)
 	RemoveFolder(ctx context.Context, id uuid.UUID) (*model.Agent, error)
-	ListAgentsByFolderID(ctx context.Context, folderId uuid.UUID, accountID uuid.UUID, page int, pageSize int) ([]*model.Agent, error)
-	GetByIDAndAccountID(ctx context.Context, id uuid.UUID, accountID uuid.UUID) (*model.Agent, error)
+	ListAgentsByFolderID(ctx context.Context, folderId uuid.UUID, page int, pageSize int) ([]*model.Agent, error)
 }
 
 type agentRepository struct {
@@ -47,12 +47,10 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.Age
 	return &agent, nil
 }
 
-func (r *agentRepository) ListByAccountID(ctx context.Context, accountID uuid.UUID, page int, pageSize int) ([]*model.Agent, error) {
+func (r *agentRepository) List(ctx context.Context, page int, pageSize int) ([]*model.Agent, error) {
 	var agents []*model.Agent
 
-	query := r.db.WithContext(ctx).Where("account_id = ?", accountID)
-
-	if err := query.Offset((page - 1) * pageSize).Limit(pageSize).Find(&agents).Error; err != nil {
+	if err := r.db.WithContext(ctx).Offset((page - 1) * pageSize).Limit(pageSize).Find(&agents).Error; err != nil {
 		return []*model.Agent{}, err
 	}
 
@@ -76,9 +74,18 @@ func (r *agentRepository) Delete(ctx context.Context, id uuid.UUID) (bool, error
 	return true, nil
 }
 
-func (r *agentRepository) CountByAccountID(ctx context.Context, accountID uuid.UUID) (int64, error) {
+func (r *agentRepository) Count(ctx context.Context) (int64, error) {
 	var count int64
-	if err := r.db.WithContext(ctx).Model(&model.Agent{}).Where("account_id = ?", accountID).Count(&count).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&model.Agent{}).Count(&count).Error; err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+func (r *agentRepository) CountByFolderID(ctx context.Context, folderId uuid.UUID) (int64, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&model.Agent{}).Where("folder_id = ?", folderId).Count(&count).Error; err != nil {
 		return 0, err
 	}
 
@@ -94,24 +101,14 @@ func (r *agentRepository) RemoveFolder(ctx context.Context, id uuid.UUID) (*mode
 	return &agent, nil
 }
 
-func (r *agentRepository) ListAgentsByFolderID(ctx context.Context, folderId uuid.UUID, accountID uuid.UUID, page int, pageSize int) ([]*model.Agent, error) {
+func (r *agentRepository) ListAgentsByFolderID(ctx context.Context, folderId uuid.UUID, page int, pageSize int) ([]*model.Agent, error) {
 	var agents []*model.Agent
 
-	query := r.db.WithContext(ctx).Where("folder_id = ? AND account_id = ?", folderId, accountID)
+	query := r.db.WithContext(ctx).Where("folder_id = ?", folderId)
 
 	if err := query.Offset((page - 1) * pageSize).Limit(pageSize).Find(&agents).Error; err != nil {
 		return []*model.Agent{}, err
 	}
 
 	return agents, nil
-}
-
-func (r *agentRepository) GetByIDAndAccountID(ctx context.Context, id uuid.UUID, accountID uuid.UUID) (*model.Agent, error) {
-	var agent model.Agent
-
-	if err := r.db.WithContext(ctx).Where("id = ? AND account_id = ?", id, accountID).First(&agent).Error; err != nil {
-		return nil, err
-	}
-
-	return &agent, nil
 }

@@ -117,7 +117,7 @@ func (h *customMcpServerHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	customMcpServer, err := h.customMcpServerService.GetByIDAndAccountID(c.Request.Context(), id)
+	customMcpServer, err := h.customMcpServerService.GetByID(c.Request.Context(), id)
 
 	if err != nil {
 		code, message, httpCode := errors.HandleError(err)
@@ -172,7 +172,7 @@ func (h *customMcpServerHandler) List(c *gin.Context) {
 	req.Search = search
 	req.Tags = tags
 
-	listCustomMcpServer, err := h.customMcpServerService.ListByAccountID(c.Request.Context(), req)
+	listCustomMcpServer, err := h.customMcpServerService.List(c.Request.Context(), req)
 
 	if err != nil {
 		code, message, httpCode := errors.HandleError(err)

@@ -22,11 +22,10 @@ import (
 type CustomMcpServerService interface {
 	Create(ctx context.Context, request model.CustomMcpServer) (*model.CustomMcpServer, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*model.CustomMcpServer, error)
-	GetByIDAndAccountID(ctx context.Context, id uuid.UUID) (*model.CustomMcpServer, error)
-	ListByAccountID(ctx context.Context, request model.CustomMcpServerListRequest) (*model.CustomMcpServerListResponse, error)
+	List(ctx context.Context, request model.CustomMcpServerListRequest) (*model.CustomMcpServerListResponse, error)
 	Update(ctx context.Context, request *model.CustomMcpServer, id uuid.UUID) (*model.CustomMcpServer, error)
 	Delete(ctx context.Context, id uuid.UUID) (bool, error)
-	GetByAgentConfig(ctx context.Context, accountID uuid.UUID, serverIDs []uuid.UUID) ([]*model.CustomMcpServer, error)
+	GetByAgentConfig(ctx context.Context, serverIDs []uuid.UUID) ([]*model.CustomMcpServer, error)
 	Test(ctx context.Context, id uuid.UUID) (*model.CustomMcpServerTestResponse, error)
 }
 
@@ -43,13 +42,6 @@ func NewCustomMcpServerService(customMcpServerRepository repository.CustomMcpSer
 }
 
 func (s *customMcpServerService) Create(ctx context.Context, request model.CustomMcpServer) (*model.CustomMcpServer, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	request.AccountID = accountID
-
 	tools, err := s.discoverTools(ctx, request)
 
 	if err != nil {
@@ -77,37 +69,15 @@ func (s *customMcpServerService) GetByID(ctx context.Context, id uuid.UUID) (*mo
 	return customMcpServer, nil
 }
 
-func (s *customMcpServerService) GetByIDAndAccountID(ctx context.Context, id uuid.UUID) (*model.CustomMcpServer, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	customMcpServer, err := s.customMcpServerRepository.GetByIDAndAccountID(ctx, id, accountID)
-
-	if err != nil {
-		return nil, errorsPostgres.MapDBError(err, model.CustomMCPServerErrors)
-	}
-
-	return customMcpServer, nil
-}
-
-func (s *customMcpServerService) ListByAccountID(ctx context.Context, request model.CustomMcpServerListRequest) (*model.CustomMcpServerListResponse, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	request.AccountID = accountID
-
+func (s *customMcpServerService) List(ctx context.Context, request model.CustomMcpServerListRequest) (*model.CustomMcpServerListResponse, error) {
 	// Get paginated items
-	customMcpServers, err := s.customMcpServerRepository.ListByAccountID(ctx, request)
+	customMcpServers, err := s.customMcpServerRepository.List(ctx, request)
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.CustomMCPServerErrors)
 	}
 
 	// Get total count
-	totalItems, err := s.customMcpServerRepository.CountByAccountID(ctx, request)
+	totalItems, err := s.customMcpServerRepository.Count(ctx, request)
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.CustomMCPServerErrors)
 	}
@@ -135,13 +105,7 @@ func (s *customMcpServerService) ListByAccountID(ctx context.Context, request mo
 }
 
 func (s *customMcpServerService) Update(ctx context.Context, request *model.CustomMcpServer, id uuid.UUID) (*model.CustomMcpServer, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = s.customMcpServerRepository.GetByIDAndAccountID(ctx, id, accountID)
-
+	_, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.CustomMCPServerErrors)
 	}
@@ -164,13 +128,7 @@ func (s *customMcpServerService) Update(ctx context.Context, request *model.Cust
 }
 
 func (s *customMcpServerService) Delete(ctx context.Context, id uuid.UUID) (bool, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	_, err = s.customMcpServerRepository.GetByIDAndAccountID(ctx, id, accountID)
-
+	_, err := s.GetByID(ctx, id)
 	if err != nil {
 		return false, errorsPostgres.MapDBError(err, model.CustomMCPServerErrors)
 	}
@@ -213,8 +171,8 @@ func (s *customMcpServerService) discoverTools(ctx context.Context, request mode
 	return tools, nil
 }
 
-func (s *customMcpServerService) GetByAgentConfig(ctx context.Context, accountID uuid.UUID, serverIDs []uuid.UUID) ([]*model.CustomMcpServer, error) {
-	servers, err := s.customMcpServerRepository.GetByAgentConfig(ctx, accountID, serverIDs)
+func (s *customMcpServerService) GetByAgentConfig(ctx context.Context, serverIDs []uuid.UUID) ([]*model.CustomMcpServer, error) {
+	servers, err := s.customMcpServerRepository.GetByAgentConfig(ctx, serverIDs)
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.CustomMCPServerErrors)
 	}
@@ -223,7 +181,7 @@ func (s *customMcpServerService) GetByAgentConfig(ctx context.Context, accountID
 }
 
 func (s *customMcpServerService) Test(ctx context.Context, id uuid.UUID) (*model.CustomMcpServerTestResponse, error) {
-	customMcpServer, err := s.GetByIDAndAccountID(ctx, id)
+	customMcpServer, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.CustomMCPServerErrors)
 	}

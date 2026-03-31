@@ -124,7 +124,7 @@ func (h *customToolHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	customTools, err := h.customToolService.GetByIDAndAccountID(c.Request.Context(), id)
+	customTools, err := h.customToolService.GetByID(c.Request.Context(), id)
 
 	if err != nil {
 		code, message, httpCode := errors.HandleError(err)
@@ -179,7 +179,7 @@ func (h *customToolHandler) List(c *gin.Context) {
 	req.Search = search
 	req.Tags = tags
 
-	listCustomTools, err := h.customToolService.ListByAccountID(c.Request.Context(), req)
+	listCustomTools, err := h.customToolService.List(c.Request.Context(), req)
 
 	if err != nil {
 		code, message, httpCode := errors.HandleError(err)

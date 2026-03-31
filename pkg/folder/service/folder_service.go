@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	errorsPostgres "evo-ai-core-service/internal/infra/postgres"
-	"evo-ai-core-service/internal/utils/contextutils"
 	folderShareModel "evo-ai-core-service/pkg/folder_share/model"
 
 	"evo-ai-core-service/pkg/folder/model"
@@ -16,11 +15,10 @@ import (
 type FolderService interface {
 	Create(ctx context.Context, request model.Folder) (*model.Folder, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Folder, error)
-	ListByAccountID(ctx context.Context, page int, pageSize int) (*model.FolderListResponse, error)
+	List(ctx context.Context, page int, pageSize int) (*model.FolderListResponse, error)
 	Update(ctx context.Context, request *model.Folder, id uuid.UUID) (*model.Folder, error)
 	Delete(ctx context.Context, id uuid.UUID) (bool, error)
 	ListOwnedFolders(ctx context.Context, page int, pageSize int) ([]*folderShareModel.FolderWithSharingResponse, error)
-	GetByIDAndAccountID(ctx context.Context, id uuid.UUID) (*model.Folder, error)
 }
 
 type folderService struct {
@@ -34,13 +32,6 @@ func NewFolderService(folderRepository repository.FolderRepository) FolderServic
 }
 
 func (s *folderService) Create(ctx context.Context, request model.Folder) (*model.Folder, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	request.AccountID = accountID
-
 	folder, err := s.folderRepository.Create(ctx, request)
 
 	if err != nil {
@@ -60,20 +51,15 @@ func (s *folderService) GetByID(ctx context.Context, id uuid.UUID) (*model.Folde
 	return folder, nil
 }
 
-func (s *folderService) ListByAccountID(ctx context.Context, page int, pageSize int) (*model.FolderListResponse, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+func (s *folderService) List(ctx context.Context, page int, pageSize int) (*model.FolderListResponse, error) {
 	// Get paginated items
-	folders, err := s.folderRepository.ListByAccountID(ctx, accountID, page, pageSize)
+	folders, err := s.folderRepository.List(ctx, page, pageSize)
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.FolderErrors)
 	}
 
 	// Get total count
-	totalItems, err := s.folderRepository.CountByAccountID(ctx, accountID)
+	totalItems, err := s.folderRepository.Count(ctx)
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.FolderErrors)
 	}
@@ -101,7 +87,7 @@ func (s *folderService) ListByAccountID(ctx context.Context, page int, pageSize 
 }
 
 func (s *folderService) Update(ctx context.Context, request *model.Folder, id uuid.UUID) (*model.Folder, error) {
-	_, err := s.GetByIDAndAccountID(ctx, id)
+	_, err := s.GetByID(ctx, id)
 
 	if err != nil {
 		return nil, errors.New("Folder not found")
@@ -117,7 +103,7 @@ func (s *folderService) Update(ctx context.Context, request *model.Folder, id uu
 }
 
 func (s *folderService) Delete(ctx context.Context, id uuid.UUID) (bool, error) {
-	_, err := s.GetByIDAndAccountID(ctx, id)
+	_, err := s.GetByID(ctx, id)
 
 	if err != nil {
 		return false, errors.New("Folder not found")
@@ -133,7 +119,7 @@ func (s *folderService) Delete(ctx context.Context, id uuid.UUID) (bool, error) 
 }
 func (s *folderService) ListOwnedFolders(ctx context.Context, page int, pageSize int) ([]*folderShareModel.FolderWithSharingResponse, error) {
 	// Use repository directly to get the folder entities
-	ownedFolders, err := s.ListByAccountID(ctx, page, pageSize)
+	ownedFolders, err := s.List(ctx, page, pageSize)
 	if err != nil {
 		return nil, errors.New("Failed to list folders")
 	}
@@ -143,7 +129,6 @@ func (s *folderService) ListOwnedFolders(ctx context.Context, page int, pageSize
 	for _, folder := range ownedFolders.Items {
 		result = append(result, &folderShareModel.FolderWithSharingResponse{
 			ID:              folder.ID,
-			AccountID:       folder.AccountID,
 			Name:            folder.Name,
 			Description:     folder.Description,
 			CreatedAt:       folder.CreatedAt,
@@ -156,19 +141,4 @@ func (s *folderService) ListOwnedFolders(ctx context.Context, page int, pageSize
 	}
 
 	return result, nil
-}
-
-func (s *folderService) GetByIDAndAccountID(ctx context.Context, id uuid.UUID) (*model.Folder, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	folder, err := s.folderRepository.GetByIDAndAccountID(ctx, id, accountID)
-
-	if err != nil {
-		return nil, errorsPostgres.MapDBError(err, model.FolderErrors)
-	}
-
-	return folder, nil
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"evo-ai-core-service/internal/httpclient"
 	errorsPostgres "evo-ai-core-service/internal/infra/postgres"
-	"evo-ai-core-service/internal/utils/contextutils"
 	"evo-ai-core-service/internal/utils/stringutils"
 	model "evo-ai-core-service/pkg/custom_tool/model"
 	repository "evo-ai-core-service/pkg/custom_tool/repository"
@@ -19,8 +18,7 @@ import (
 type CustomToolService interface {
 	Create(ctx context.Context, request model.CustomTool) (*model.CustomTool, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*model.CustomTool, error)
-	ListByAccountID(ctx context.Context, request model.CustomToolListRequest) (*model.CustomToolListResponse, error)
-	GetByIDAndAccountID(ctx context.Context, id uuid.UUID) (*model.CustomTool, error)
+	List(ctx context.Context, request model.CustomToolListRequest) (*model.CustomToolListResponse, error)
 	Update(ctx context.Context, request *model.CustomTool, id uuid.UUID) (*model.CustomTool, error)
 	Delete(ctx context.Context, id uuid.UUID) (bool, error)
 	ConvertToHTTPTool(tool model.CustomToolResponse) map[string]interface{}
@@ -38,12 +36,6 @@ func NewCustomToolService(customToolRepository repository.CustomToolRepository) 
 }
 
 func (s *customToolService) Create(ctx context.Context, request model.CustomTool) (*model.CustomTool, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	request.AccountID = accountID
 	customTool, err := s.customToolRepository.Create(ctx, request)
 
 	if err != nil {
@@ -63,22 +55,15 @@ func (s *customToolService) GetByID(ctx context.Context, id uuid.UUID) (*model.C
 	return customTool, nil
 }
 
-func (s *customToolService) ListByAccountID(ctx context.Context, request model.CustomToolListRequest) (*model.CustomToolListResponse, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	request.AccountID = accountID
-
+func (s *customToolService) List(ctx context.Context, request model.CustomToolListRequest) (*model.CustomToolListResponse, error) {
 	// Get paginated items
-	customTools, err := s.customToolRepository.ListByAccountID(ctx, request)
+	customTools, err := s.customToolRepository.List(ctx, request)
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.CustomToolErrors)
 	}
 
 	// Get total count
-	totalItems, err := s.customToolRepository.CountByAccountID(ctx, request)
+	totalItems, err := s.customToolRepository.Count(ctx, request)
 	if err != nil {
 		return nil, errorsPostgres.MapDBError(err, model.CustomToolErrors)
 	}
@@ -105,23 +90,8 @@ func (s *customToolService) ListByAccountID(ctx context.Context, request model.C
 	}, nil
 }
 
-func (s *customToolService) GetByIDAndAccountID(ctx context.Context, id uuid.UUID) (*model.CustomTool, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	customTool, err := s.customToolRepository.GetByIDAndAccountID(ctx, id, accountID)
-
-	if err != nil {
-		return nil, errorsPostgres.MapDBError(err, model.CustomToolErrors)
-	}
-
-	return customTool, nil
-}
-
 func (s *customToolService) Update(ctx context.Context, request *model.CustomTool, id uuid.UUID) (*model.CustomTool, error) {
-	_, err := s.GetByIDAndAccountID(ctx, id)
+	_, err := s.GetByID(ctx, id)
 
 	if err != nil {
 		return nil, err
@@ -137,7 +107,7 @@ func (s *customToolService) Update(ctx context.Context, request *model.CustomToo
 }
 
 func (s *customToolService) Delete(ctx context.Context, id uuid.UUID) (bool, error) {
-	_, err := s.GetByIDAndAccountID(ctx, id)
+	_, err := s.GetByID(ctx, id)
 
 	if err != nil {
 		return false, err
@@ -188,7 +158,7 @@ func (s *customToolService) ConvertToHTTPTool(tool model.CustomToolResponse) map
 }
 
 func (s *customToolService) Test(ctx context.Context, id uuid.UUID) (*model.CustomToolTestResponse, error) {
-	customTool, err := s.GetByIDAndAccountID(ctx, id)
+	customTool, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}

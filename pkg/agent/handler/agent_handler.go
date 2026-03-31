@@ -26,7 +26,7 @@ type AgentHandler interface {
 	RegisterRoutesMiddleware(router gin.IRouter)
 	Create(c *gin.Context)
 	GetByID(c *gin.Context)
-	ListByAccountID(c *gin.Context)
+	List(c *gin.Context)
 	Update(c *gin.Context)
 	Delete(c *gin.Context)
 	ImportAgents(c *gin.Context)
@@ -60,15 +60,15 @@ func (h *agentHandler) RegisterRoutesMiddleware(router gin.IRouter) {
 
 	agents := router.Group("/agents")
 	{
-		agentAccessMiddleware := middleware.NewAgentAccessMiddleware(h.folderShareService, h.agentService).GetAgentAccessMiddleware()
+		agentAccessMiddleware := middleware.NewAgentAccessMiddleware(h.agentService).GetAgentAccessMiddleware()
 
 		// Read permissions
 		agents.GET("",
 			permissionMiddleware.RequirePermission("ai_agents", "read"),
-			h.ListByAccountID)
+			h.List)
 		agents.GET("/",
 			permissionMiddleware.RequirePermission("ai_agents", "read"),
-			h.ListByAccountID)
+			h.List)
 		agents.GET("/:id",
 			permissionMiddleware.RequirePermission("ai_agents", "read"),
 			agentAccessMiddleware,
@@ -165,7 +165,7 @@ func (h *agentHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	agent, err := h.agentService.GetByIDAndAccountID(c.Request.Context(), id)
+	agent, err := h.agentService.GetByID(c.Request.Context(), id)
 
 	if err != nil {
 		code, message, httpCode := errors.HandleError(err)
@@ -177,7 +177,7 @@ func (h *agentHandler) GetByID(c *gin.Context) {
 }
 
 // List handles the list agents request
-func (h *agentHandler) ListByAccountID(c *gin.Context) {
+func (h *agentHandler) List(c *gin.Context) {
 	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if err != nil {
 		code, message, httpCode := errors.HandleError(err)
@@ -211,7 +211,7 @@ func (h *agentHandler) ListByAccountID(c *gin.Context) {
 		pageSize = limitVal
 	}
 
-	listAgents, err := h.agentService.ListByAccountID(c.Request.Context(), page, pageSize)
+	listAgents, err := h.agentService.List(c.Request.Context(), page, pageSize)
 
 	if err != nil {
 		code, message, httpCode := errors.HandleError(err)

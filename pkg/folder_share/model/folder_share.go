@@ -48,7 +48,6 @@ type FolderShareUpdateRequest struct {
 
 type FolderWithSharingResponse struct {
 	ID              uuid.UUID  `json:"id"`
-	AccountID       uuid.UUID  `json:"account_id"`
 	Name            string     `json:"name"`
 	Description     string     `json:"description"`
 	CreatedAt       time.Time  `json:"created_at"`

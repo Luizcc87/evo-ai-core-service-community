@@ -8,10 +8,8 @@ import (
 
 	"evo-ai-core-service/internal/httpclient/response"
 	"evo-ai-core-service/internal/services"
-	"evo-ai-core-service/internal/types"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 type EvoAuthMiddleware interface {
@@ -61,31 +59,13 @@ func (m *evoAuthMiddleware) GetEvoAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Use the first active account as default
-		var activeAccount types.EvoAuthAccount
-		for _, account := range tokenDataResponse.Accounts {
-			if account.Status == "active" {
-				activeAccount = account
-				break
-			}
-		}
-
-		if activeAccount.ID == uuid.Nil {
-			response.ErrorResponse(c, "UNAUTHORIZED", "No active account found", nil, http.StatusUnauthorized)
-			c.Abort()
-			return
-		}
-
 		// Add information to the context
 		ctx := context.WithValue(c.Request.Context(), "user_id", tokenDataResponse.User.ID)
-		ctx = context.WithValue(ctx, "account_id", activeAccount.ID)
 		ctx = context.WithValue(ctx, "email", tokenDataResponse.User.Email)
 		ctx = context.WithValue(ctx, "name", tokenDataResponse.User.Name)
 		ctx = context.WithValue(ctx, "token", token)
 		ctx = context.WithValue(ctx, "token_type", tokenType)
 		ctx = context.WithValue(ctx, "user", tokenDataResponse.User)
-		ctx = context.WithValue(ctx, "accounts", tokenDataResponse.Accounts)
-		ctx = context.WithValue(ctx, "account", activeAccount)
 		ctx = context.WithValue(ctx, "role", tokenDataResponse.User.Role)
 		ctx = context.WithValue(ctx, "type", tokenDataResponse.User.Type)
 

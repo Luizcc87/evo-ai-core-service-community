@@ -18,7 +18,7 @@ type FolderHandler interface {
 	RegisterRoutesMiddleware(router gin.IRouter)
 	Create(c *gin.Context)
 	GetByID(c *gin.Context)
-	ListByAccountID(c *gin.Context)
+	List(c *gin.Context)
 	Update(c *gin.Context)
 	Delete(c *gin.Context)
 }
@@ -44,10 +44,10 @@ func (h *folderHandler) RegisterRoutesMiddleware(router gin.IRouter) {
 		// Read permissions
 		folders.GET("",
 			permissionMiddleware.RequirePermission("ai_folders", "read"),
-			h.ListByAccountID)
+			h.List)
 		folders.GET("/",
 			permissionMiddleware.RequirePermission("ai_folders", "read"),
-			h.ListByAccountID)
+			h.List)
 		folders.GET("/:id",
 			permissionMiddleware.RequirePermission("ai_folders", "read"),
 			h.GetByID)
@@ -74,8 +74,8 @@ func (h *folderHandler) RegisterRoutesMiddleware(router gin.IRouter) {
 	// Endpoint específico que o frontend espera
 	router.GET("/agents/accessible-folders",
 		permissionMiddleware.RequirePermission("ai_folders", "access_shared"),
-		h.ListByAccountID)
-	router.GET("/agents/accessible-folders/", h.ListByAccountID) // Com barra também
+		h.List)
+	router.GET("/agents/accessible-folders/", h.List) // Com barra também
 }
 
 // Create handles the create folder request
@@ -110,7 +110,7 @@ func (h *folderHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	folder, err := h.folderService.GetByIDAndAccountID(c.Request.Context(), id)
+	folder, err := h.folderService.GetByID(c.Request.Context(), id)
 
 	if err != nil {
 		code, message, httpCode := errors.HandleError(err)
@@ -122,7 +122,7 @@ func (h *folderHandler) GetByID(c *gin.Context) {
 }
 
 // List handles the list folders request
-func (h *folderHandler) ListByAccountID(c *gin.Context) {
+func (h *folderHandler) List(c *gin.Context) {
 	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if err != nil {
 		code, message, httpCode := errors.HandleError(err)
@@ -156,7 +156,7 @@ func (h *folderHandler) ListByAccountID(c *gin.Context) {
 		pageSize = limitVal
 	}
 
-	listFolders, err := h.folderService.ListByAccountID(c.Request.Context(), page, pageSize)
+	listFolders, err := h.folderService.List(c.Request.Context(), page, pageSize)
 
 	if err != nil {
 		code, message, httpCode := errors.HandleError(err)

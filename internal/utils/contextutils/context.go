@@ -11,14 +11,6 @@ import (
 
 var ErrUnauthorized = errors.New("unauthorized")
 
-func GetAccountID(ctx context.Context) (uuid.UUID, error) {
-	if accountID, ok := ctx.Value("account_id").(uuid.UUID); ok {
-		return accountID, nil
-	}
-
-	return uuid.Nil, errors.New("account_id not found in context")
-}
-
 func GetUserID(ctx context.Context) (uuid.UUID, error) {
 	if userID, ok := ctx.Value("user_id").(uuid.UUID); ok {
 		return userID, nil
@@ -83,22 +75,3 @@ func GetUser(ctx context.Context) (types.EvoAuthUser, error) {
 
 	return types.EvoAuthUser{}, errors.New("user not found in context")
 }
-
-// GetAccounts returns all accounts from context
-func GetAccounts(ctx context.Context) ([]types.EvoAuthAccount, error) {
-	if accounts, ok := ctx.Value("accounts").([]types.EvoAuthAccount); ok {
-		return accounts, nil
-	}
-
-	return nil, errors.New("accounts not found in context")
-}
-
-// GetAccount returns the currently active account based on account_id in context
-func GetAccount(ctx context.Context) (types.EvoAuthAccount, error) {
-	if account, ok := ctx.Value("account").(types.EvoAuthAccount); ok {
-		return account, nil
-	}
-
-	return types.EvoAuthAccount{}, errors.New("active account not found")
-}
-

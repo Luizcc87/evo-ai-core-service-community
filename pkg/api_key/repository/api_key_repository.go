@@ -11,9 +11,9 @@ import (
 
 type ApiKeyRepository interface {
 	Create(ctx context.Context, apiKey model.ApiKey) (*model.ApiKey, error)
-	GetByIDAndAccountID(ctx context.Context, id uuid.UUID, accountID uuid.UUID) (*model.ApiKey, error)
-	ListByAccountID(ctx context.Context, request model.ApiKeyListRequest) ([]*model.ApiKey, error)
-	CountByAccountID(ctx context.Context, accountID uuid.UUID, active string) (int64, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*model.ApiKey, error)
+	List(ctx context.Context, request model.ApiKeyListRequest) ([]*model.ApiKey, error)
+	Count(ctx context.Context, active string) (int64, error)
 	Update(ctx context.Context, apiKey *model.ApiKey, id uuid.UUID) (*model.ApiKey, error)
 	Delete(ctx context.Context, id uuid.UUID) (bool, error)
 }
@@ -34,20 +34,20 @@ func (r *apiKeyRepository) Create(ctx context.Context, apiKey model.ApiKey) (*mo
 	return &apiKey, nil
 }
 
-func (r *apiKeyRepository) GetByIDAndAccountID(ctx context.Context, id uuid.UUID, accountID uuid.UUID) (*model.ApiKey, error) {
+func (r *apiKeyRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.ApiKey, error) {
 	var apiKey model.ApiKey
 
-	if err := r.db.WithContext(ctx).Where("id = ? AND account_id = ?", id, accountID).First(&apiKey).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&apiKey).Error; err != nil {
 		return nil, err
 	}
 
 	return &apiKey, nil
 }
 
-func (r *apiKeyRepository) ListByAccountID(ctx context.Context, request model.ApiKeyListRequest) ([]*model.ApiKey, error) {
+func (r *apiKeyRepository) List(ctx context.Context, request model.ApiKeyListRequest) ([]*model.ApiKey, error) {
 	var apiKeys []*model.ApiKey
 
-	query := r.db.WithContext(ctx).Where("account_id = ?", request.AccountID)
+	query := r.db.WithContext(ctx)
 
 	// Filter by active status - default to active only
 	if request.Active != "" {
@@ -64,10 +64,10 @@ func (r *apiKeyRepository) ListByAccountID(ctx context.Context, request model.Ap
 	return apiKeys, nil
 }
 
-func (r *apiKeyRepository) CountByAccountID(ctx context.Context, accountID uuid.UUID, active string) (int64, error) {
+func (r *apiKeyRepository) Count(ctx context.Context, active string) (int64, error) {
 	var count int64
 
-	query := r.db.WithContext(ctx).Model(&model.ApiKey{}).Where("account_id = ?", accountID)
+	query := r.db.WithContext(ctx).Model(&model.ApiKey{})
 
 	// Filter by active status - default to active only
 	if active != "" {

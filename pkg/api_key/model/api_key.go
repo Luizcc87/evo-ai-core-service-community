@@ -8,7 +8,6 @@ import (
 
 type ApiKey struct {
 	ID        uuid.UUID `json:"-" gorm:"<-:create;type:uuid;primary_key;default:uuid_generate_v4()"`
-	AccountID uuid.UUID `json:"-" gorm:"<-:create;not null;type:uuid"` // Removed foreign key reference to external accounts table
 	Name      string    `json:"-" gorm:"not null; type:varchar(255)"`
 	Provider  string    `json:"-" gorm:"not null; type:varchar(255)"`
 	Key       string    `json:"-" gorm:"not null; type:text"`
@@ -59,7 +58,6 @@ func (r *ApiKeyUpdateRequest) GetKey() string {
 
 type ApiKeyResponse struct {
 	ID        uuid.UUID `json:"id"`
-	AccountID uuid.UUID `json:"account_id"`
 	Name      string    `json:"name"`
 	Provider  string    `json:"provider"`
 	Key       string    `json:"key"`
@@ -79,16 +77,14 @@ type ApiKeyListResponse struct {
 }
 
 type ApiKeyListRequest struct {
-	AccountID uuid.UUID `json:"-" binding:"required"`
-	Page      int       `json:"-" binding:"required"`
-	PageSize  int       `json:"-" binding:"required"`
-	Active    string    `json:"-" binding:"required"`
+	Page     int    `json:"-" binding:"required"`
+	PageSize int    `json:"-" binding:"required"`
+	Active   string `json:"-" binding:"required"`
 }
 
 func (u *ApiKey) ToResponse() *ApiKeyResponse {
 	return &ApiKeyResponse{
 		ID:        u.ID,
-		AccountID: u.AccountID,
 		Name:      u.Name,
 		Provider:  u.Provider,
 		Key:       u.Key,

@@ -21,7 +21,7 @@ type ApiKeyHandler interface {
 	RegisterRoutesMiddleware(router gin.IRouter)
 	Create(c *gin.Context)
 	GetByID(c *gin.Context)
-	ListByAccountID(c *gin.Context)
+	List(c *gin.Context)
 	Update(c *gin.Context)
 	Delete(c *gin.Context)
 }
@@ -52,10 +52,10 @@ func (h *apiKeyHandler) RegisterRoutesMiddleware(router gin.IRouter) {
 		// Read permissions
 		apiKeys.GET("",
 			permissionMiddleware.RequirePermission("ai_api_keys", "read"),
-			h.ListByAccountID)
+			h.List)
 		apiKeys.GET("/",
 			permissionMiddleware.RequirePermission("ai_api_keys", "read"),
-			h.ListByAccountID)
+			h.List)
 		apiKeys.GET("/:id",
 			permissionMiddleware.RequirePermission("ai_api_keys", "read"),
 			h.GetByID)
@@ -145,7 +145,7 @@ func (h *apiKeyHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	apiKey, err := h.apiKeyService.GetByIDAndAccountID(c.Request.Context(), id)
+	apiKey, err := h.apiKeyService.GetByID(c.Request.Context(), id)
 
 	if err != nil {
 		code, message, httpCode := errors.HandleError(err)
@@ -157,7 +157,7 @@ func (h *apiKeyHandler) GetByID(c *gin.Context) {
 }
 
 // List handles the list api keys request
-func (h *apiKeyHandler) ListByAccountID(c *gin.Context) {
+func (h *apiKeyHandler) List(c *gin.Context) {
 	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if err != nil {
 		code, message, httpCode := errors.HandleError(err)
@@ -198,7 +198,7 @@ func (h *apiKeyHandler) ListByAccountID(c *gin.Context) {
 	req.PageSize = pageSize
 	req.Active = active
 
-	listApiKeys, err := h.apiKeyService.ListByAccountID(c.Request.Context(), req)
+	listApiKeys, err := h.apiKeyService.List(c.Request.Context(), req)
 
 	if err != nil {
 		code, message, httpCode := errors.HandleError(err)

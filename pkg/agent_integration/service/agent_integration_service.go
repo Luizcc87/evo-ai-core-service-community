@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"evo-ai-core-service/internal/infra/postgres"
-	"evo-ai-core-service/internal/utils/contextutils"
 	"evo-ai-core-service/pkg/agent_integration/model"
 	"evo-ai-core-service/pkg/agent_integration/repository"
 
@@ -30,11 +29,6 @@ func NewAgentIntegrationService(repository repository.AgentIntegrationRepository
 }
 
 func (s *agentIntegrationService) Upsert(ctx context.Context, agentID uuid.UUID, request model.AgentIntegrationRequest) (*model.AgentIntegrationResponse, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	// Convert map to datatypes.JSON
 	configBytes, err := json.Marshal(request.Config)
 	if err != nil {
@@ -42,10 +36,9 @@ func (s *agentIntegrationService) Upsert(ctx context.Context, agentID uuid.UUID,
 	}
 
 	integration := model.AgentIntegration{
-		AccountID: accountID,
-		AgentID:   agentID,
-		Provider:  request.Provider,
-		Config:    datatypes.JSON(configBytes),
+		AgentID:  agentID,
+		Provider: request.Provider,
+		Config:   datatypes.JSON(configBytes),
 	}
 
 	result, err := s.repository.Upsert(ctx, integration)
@@ -57,12 +50,7 @@ func (s *agentIntegrationService) Upsert(ctx context.Context, agentID uuid.UUID,
 }
 
 func (s *agentIntegrationService) GetByProvider(ctx context.Context, agentID uuid.UUID, provider string) (*model.AgentIntegrationResponse, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	integration, err := s.repository.GetByAccountAgentAndProvider(ctx, accountID, agentID, provider)
+	integration, err := s.repository.GetByAgentAndProvider(ctx, agentID, provider)
 	if err != nil {
 		return nil, postgres.MapDBError(err, model.AgentIntegrationErrors)
 	}
@@ -71,12 +59,7 @@ func (s *agentIntegrationService) GetByProvider(ctx context.Context, agentID uui
 }
 
 func (s *agentIntegrationService) ListByAgent(ctx context.Context, agentID uuid.UUID) ([]*model.AgentIntegrationResponse, error) {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	integrations, err := s.repository.ListByAccountAndAgent(ctx, accountID, agentID)
+	integrations, err := s.repository.ListByAgent(ctx, agentID)
 	if err != nil {
 		return nil, postgres.MapDBError(err, model.AgentIntegrationErrors)
 	}
@@ -90,12 +73,7 @@ func (s *agentIntegrationService) ListByAgent(ctx context.Context, agentID uuid.
 }
 
 func (s *agentIntegrationService) Delete(ctx context.Context, agentID uuid.UUID, provider string) error {
-	accountID, err := contextutils.GetAccountID(ctx)
-	if err != nil {
-		return err
-	}
-
-	err = s.repository.Delete(ctx, accountID, agentID, provider)
+	err := s.repository.Delete(ctx, agentID, provider)
 	if err != nil {
 		return postgres.MapDBError(err, model.AgentIntegrationErrors)
 	}

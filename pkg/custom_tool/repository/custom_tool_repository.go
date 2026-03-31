@@ -14,9 +14,8 @@ import (
 type CustomToolRepository interface {
 	Create(ctx context.Context, customTool model.CustomTool) (*model.CustomTool, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*model.CustomTool, error)
-	ListByAccountID(ctx context.Context, request model.CustomToolListRequest) ([]*model.CustomTool, error)
-	CountByAccountID(ctx context.Context, request model.CustomToolListRequest) (int64, error)
-	GetByIDAndAccountID(ctx context.Context, id uuid.UUID, accountID uuid.UUID) (*model.CustomTool, error)
+	List(ctx context.Context, request model.CustomToolListRequest) ([]*model.CustomTool, error)
+	Count(ctx context.Context, request model.CustomToolListRequest) (int64, error)
 	Update(ctx context.Context, customTool *model.CustomTool, id uuid.UUID) (*model.CustomTool, error)
 	Delete(ctx context.Context, id uuid.UUID) (bool, error)
 }
@@ -47,10 +46,10 @@ func (r *customToolRepository) GetByID(ctx context.Context, id uuid.UUID) (*mode
 	return &customTool, nil
 }
 
-func (r *customToolRepository) ListByAccountID(ctx context.Context, request model.CustomToolListRequest) ([]*model.CustomTool, error) {
+func (r *customToolRepository) List(ctx context.Context, request model.CustomToolListRequest) ([]*model.CustomTool, error) {
 	var customTool []*model.CustomTool
 
-	query := r.db.WithContext(ctx).Where("account_id = ?", request.AccountID)
+	query := r.db.WithContext(ctx)
 
 	if request.Search != "" {
 		query = query.Where("name ILIKE ?", "%"+request.Search+"%")
@@ -67,10 +66,10 @@ func (r *customToolRepository) ListByAccountID(ctx context.Context, request mode
 	return customTool, nil
 }
 
-func (r *customToolRepository) CountByAccountID(ctx context.Context, request model.CustomToolListRequest) (int64, error) {
+func (r *customToolRepository) Count(ctx context.Context, request model.CustomToolListRequest) (int64, error) {
 	var count int64
 
-	query := r.db.WithContext(ctx).Model(&model.CustomTool{}).Where("account_id = ?", request.AccountID)
+	query := r.db.WithContext(ctx).Model(&model.CustomTool{})
 
 	if request.Search != "" {
 		query = query.Where("name ILIKE ?", "%"+request.Search+"%")
@@ -85,16 +84,6 @@ func (r *customToolRepository) CountByAccountID(ctx context.Context, request mod
 	}
 
 	return count, nil
-}
-
-func (r *customToolRepository) GetByIDAndAccountID(ctx context.Context, id uuid.UUID, accountID uuid.UUID) (*model.CustomTool, error) {
-	var customTool model.CustomTool
-
-	if err := r.db.WithContext(ctx).Where("id = ? AND account_id = ?", id, accountID).First(&customTool).Error; err != nil {
-		return nil, err
-	}
-
-	return &customTool, nil
 }
 
 func (r *customToolRepository) Update(ctx context.Context, customTool *model.CustomTool, id uuid.UUID) (*model.CustomTool, error) {
