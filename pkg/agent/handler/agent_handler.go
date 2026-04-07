@@ -31,7 +31,6 @@ type AgentHandler interface {
 	Delete(c *gin.Context)
 	ImportAgents(c *gin.Context)
 	ListAgentsByFolderID(c *gin.Context)
-	SyncEvolutionBot(c *gin.Context)
 	GetSharedAgent(c *gin.Context)
 	GetShareAgent(c *gin.Context)
 	AssignFolder(c *gin.Context)
@@ -109,11 +108,6 @@ func (h *agentHandler) RegisterRoutesMiddleware(router gin.IRouter) {
 			agentAccessMiddleware,
 			h.Delete)
 
-		// Sync permissions
-		agents.POST("/:id/sync-evolution",
-			permissionMiddleware.RequirePermission("ai_agents", "sync"),
-			agentAccessMiddleware,
-			h.SyncEvolutionBot)
 	}
 
 	folders := router.Group("/agents/folders")

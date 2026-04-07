@@ -92,7 +92,6 @@ func main() {
 		customToolModule.Service,
 		customMcpServerModule.Service,
 		folderShareModule.Service,
-		cfg.Evolution.BaseURL,
 	)
 
 	// Initialize handlers

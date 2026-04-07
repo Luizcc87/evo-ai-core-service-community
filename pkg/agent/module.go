@@ -30,10 +30,10 @@ func New(
 	customToolService customToolService.CustomToolService,
 	customMCPServerService customMCPServerService.CustomMcpServerService,
 	folderShareService folderShareService.FolderShareService,
-	evolutionBaseURL string,
 ) *Module {
 	r := repository.NewAgentRepository(db)
-	evolutionService := service.NewEvolutionService(evolutionBaseURL)
+	agentBotRepo := repository.NewAgentBotRepository(db)
+	evolutionService := service.NewEvolutionService(agentBotRepo)
 	s := service.NewAgentService(r,
 		folderService,
 		apiKeyService,

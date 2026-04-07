@@ -36,7 +36,6 @@ type AgentService interface {
 	GetShareAgent(ctx context.Context, id uuid.UUID) (string, error)
 	AssignFolder(ctx context.Context, id uuid.UUID, request *model.Agent) (*model.Agent, error)
 	ListAgentsByFolderID(ctx context.Context, folderId uuid.UUID, page int, pageSize int) (*model.AgentListResponse, error)
-	SyncEvolutionBot(ctx context.Context, id uuid.UUID) (*model.Agent, error)
 }
 
 type agentService struct {
@@ -120,9 +119,8 @@ func (s *agentService) Create(ctx context.Context, request model.Agent) (*model.
 		agent.EvolutionBotID = &evolutionBot.ID
 		agent.EvolutionBotSync = true
 		agent, err = s.agentRepository.Update(ctx, agent, agent.ID)
-
 		if err != nil {
-			s.evolutionService.CleanupEvolutionBot(ctx, *agent.EvolutionBotID)
+			s.evolutionService.CleanupEvolutionBot(ctx, evolutionBot.ID)
 			return nil, errorsPostgres.MapDBError(err, model.AgentErrors)
 		}
 	}
@@ -802,24 +800,3 @@ func (s *agentService) ListReadAgents(ctx context.Context, request *model.AgentR
 	return agents, nil
 }
 
-func (s *agentService) SyncEvolutionBot(ctx context.Context, id uuid.UUID) (*model.Agent, error) {
-	agent, err := s.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	evolutionBot, err := s.evolutionService.SyncAgentBot(ctx, agent, s.aiProcessorURL)
-	if err != nil {
-		return nil, errors.New("Failed to sync Evolution bot")
-	}
-
-	agent.EvolutionBotID = &evolutionBot.ID
-	agent.EvolutionBotSync = true
-
-	agent, err = s.agentRepository.Update(ctx, agent, agent.ID)
-	if err != nil {
-		return nil, errorsPostgres.MapDBError(err, model.AgentErrors)
-	}
-
-	return agent, nil
-}

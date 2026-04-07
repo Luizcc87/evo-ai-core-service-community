@@ -6,33 +6,32 @@ import (
 	"fmt"
 	"log"
 
-	"evo-ai-core-service/internal/utils/contextutils"
-	"evo-ai-core-service/pkg/agent/client/evolution"
 	"evo-ai-core-service/pkg/agent/model"
+	"evo-ai-core-service/pkg/agent/repository"
 
 	"github.com/google/uuid"
 )
 
 type EvolutionService interface {
-	CreateAgentBot(ctx context.Context, agent *model.Agent, aiProcessorURL string) (*evolution.AgentBot, error)
-	UpdateAgentBot(ctx context.Context, agent *model.Agent, aiProcessorURL string) (*evolution.AgentBot, error)
+	CreateAgentBot(ctx context.Context, agent *model.Agent, aiProcessorURL string) (*model.AgentBot, error)
+	UpdateAgentBot(ctx context.Context, agent *model.Agent, aiProcessorURL string) (*model.AgentBot, error)
 	DeleteAgentBot(ctx context.Context, agent *model.Agent) error
 	DeleteAgentBotSafe(ctx context.Context, agent *model.Agent) error
-	SyncAgentBot(ctx context.Context, agent *model.Agent, aiProcessorURL string) (*evolution.AgentBot, error)
+	SyncAgentBot(ctx context.Context, agent *model.Agent, aiProcessorURL string) (*model.AgentBot, error)
 	CleanupEvolutionBot(ctx context.Context, botID uuid.UUID)
 }
 
 type evolutionService struct {
-	evolutionClient *evolution.Client
+	agentBotRepo repository.AgentBotRepository
 }
 
-func NewEvolutionService(evolutionBaseURL string) EvolutionService {
+func NewEvolutionService(agentBotRepo repository.AgentBotRepository) EvolutionService {
 	return &evolutionService{
-		evolutionClient: evolution.NewClient(evolutionBaseURL),
+		agentBotRepo: agentBotRepo,
 	}
 }
 
-func (s *evolutionService) CreateAgentBot(ctx context.Context, agent *model.Agent, aiProcessorURL string) (*evolution.AgentBot, error) {
+func (s *evolutionService) CreateAgentBot(ctx context.Context, agent *model.Agent, aiProcessorURL string) (*model.AgentBot, error) {
 	if agent.EvolutionBotSync {
 		log.Printf("Agent %s already has Evolution bot sync enabled with bot ID %v", agent.ID, agent.EvolutionBotID)
 		return nil, nil
@@ -45,43 +44,24 @@ func (s *evolutionService) CreateAgentBot(ctx context.Context, agent *model.Agen
 		return nil, fmt.Errorf("failed to get agent API key: %w", err)
 	}
 
-	// Get the original Bearer token from context
-	token, err := contextutils.GetToken(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Bearer token: %w", err)
-	}
-
-	// Extract advanced bot configuration from agent config
 	advancedConfig := s.getAdvancedBotConfig(agent)
+	bot := s.buildAgentBot(agent, aiProcessorURL, apiKey, advancedConfig)
 
-	evolutionBot, err := s.evolutionClient.CreateAgentBot(
-		ctx,
-		agent.ID,
-		agent.Name,
-		agent.Description,
-		aiProcessorURL,
-		apiKey,
-		advancedConfig,
-		token,
-	)
+	createdBot, err := s.agentBotRepo.Create(ctx, bot)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Evolution agent bot: %w", err)
+		return nil, fmt.Errorf("failed to create agent bot: %w", err)
 	}
 
-	log.Printf("Successfully created Evolution bot %s for agent %s", evolutionBot.ID, agent.ID)
-
-	return evolutionBot, nil
+	log.Printf("Successfully created Evolution bot %s for agent %s", createdBot.ID, agent.ID)
+	return createdBot, nil
 }
 
-func (s *evolutionService) UpdateAgentBot(ctx context.Context, agent *model.Agent, aiProcessorURL string) (*evolution.AgentBot, error) {
-	// If agent has EvolutionBotID but sync is disabled, enable sync and update the existing bot
+func (s *evolutionService) UpdateAgentBot(ctx context.Context, agent *model.Agent, aiProcessorURL string) (*model.AgentBot, error) {
 	if agent.EvolutionBotID != nil && !agent.EvolutionBotSync {
-		log.Printf("Agent %s has existing Evolution bot ID %d but sync disabled, enabling sync and updating bot", agent.ID, *agent.EvolutionBotID)
+		log.Printf("Agent %s has existing Evolution bot ID %s but sync disabled, enabling sync and updating bot", agent.ID, *agent.EvolutionBotID)
 		agent.EvolutionBotSync = true
-		// Continue with update logic below
 	} else if agent.EvolutionBotID == nil {
 		log.Printf("Agent %s does not have Evolution bot, attempting to create new bot", agent.ID)
-		// Try to create the bot if it doesn't exist
 		return s.CreateAgentBot(ctx, agent, aiProcessorURL)
 	}
 
@@ -90,31 +70,17 @@ func (s *evolutionService) UpdateAgentBot(ctx context.Context, agent *model.Agen
 		return nil, fmt.Errorf("failed to get agent API key: %w", err)
 	}
 
-	// Get Bearer token from context
-	bearerToken, err := contextutils.GetToken(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Bearer token: %w", err)
-	}
-
-	// Extract advanced bot configuration from agent config
 	advancedConfig := s.getAdvancedBotConfig(agent)
+	bot := s.buildAgentBot(agent, aiProcessorURL, apiKey, advancedConfig)
+	bot.ID = *agent.EvolutionBotID
 
-	evolutionBot, err := s.evolutionClient.UpdateAgentBot(
-		ctx,
-		*agent.EvolutionBotID,
-		agent.ID,
-		agent.Name,
-		agent.Description,
-		aiProcessorURL,
-		apiKey,
-		advancedConfig,
-		bearerToken,
-	)
+	updatedBot, err := s.agentBotRepo.Update(ctx, &bot, *agent.EvolutionBotID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update Evolution agent bot: %w", err)
+		return nil, fmt.Errorf("failed to update agent bot: %w", err)
 	}
 
-	return evolutionBot, nil
+	log.Printf("Successfully updated Evolution bot %s for agent %s", updatedBot.ID, agent.ID)
+	return updatedBot, nil
 }
 
 func (s *evolutionService) DeleteAgentBot(ctx context.Context, agent *model.Agent) error {
@@ -123,13 +89,7 @@ func (s *evolutionService) DeleteAgentBot(ctx context.Context, agent *model.Agen
 		return nil
 	}
 
-	// Get the original Bearer token from context
-	token, err := contextutils.GetToken(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get Bearer token: %w", err)
-	}
-
-	err = s.evolutionClient.DeleteAgentBot(ctx, *agent.EvolutionBotID, token)
+	err := s.agentBotRepo.Delete(ctx, *agent.EvolutionBotID)
 	if err != nil {
 		log.Printf("Failed to delete Evolution bot %s for agent %s: %v", *agent.EvolutionBotID, agent.ID, err)
 		return fmt.Errorf("failed to delete Evolution bot %s: %w", *agent.EvolutionBotID, err)
@@ -145,17 +105,9 @@ func (s *evolutionService) DeleteAgentBotSafe(ctx context.Context, agent *model.
 		return nil
 	}
 
-	// Get Bearer token from context, but allow deletion to proceed even without token
-	bearerToken := ""
-	if token, err := contextutils.GetToken(ctx); err == nil {
-		bearerToken = token
-	}
-
-	err := s.evolutionClient.DeleteAgentBot(ctx, *agent.EvolutionBotID, bearerToken)
+	err := s.agentBotRepo.Delete(ctx, *agent.EvolutionBotID)
 	if err != nil {
 		log.Printf("Safe delete - Failed to delete Evolution bot %s for agent %s: %v", *agent.EvolutionBotID, agent.ID, err)
-		// In safe mode, we don't return the error to allow agent deletion to proceed
-		// This is useful for force delete operations or when Evolution is temporarily unavailable
 		return nil
 	}
 
@@ -163,19 +115,22 @@ func (s *evolutionService) DeleteAgentBotSafe(ctx context.Context, agent *model.
 	return nil
 }
 
-func (s *evolutionService) SyncAgentBot(ctx context.Context, agent *model.Agent, aiProcessorURL string) (*evolution.AgentBot, error) {
+func (s *evolutionService) SyncAgentBot(ctx context.Context, agent *model.Agent, aiProcessorURL string) (*model.AgentBot, error) {
 	if agent.EvolutionBotSync && agent.EvolutionBotID != nil {
-		// Update existing bot
 		return s.UpdateAgentBot(ctx, agent, aiProcessorURL)
 	}
-	// Create new bot
 	return s.CreateAgentBot(ctx, agent, aiProcessorURL)
 }
 
+func (s *evolutionService) CleanupEvolutionBot(ctx context.Context, botID uuid.UUID) {
+	err := s.agentBotRepo.Delete(ctx, botID)
+	if err != nil {
+		log.Printf("Failed to cleanup Evolution bot %s: %v", botID, err)
+	}
+}
+
 func (s *evolutionService) getAgentAPIKey(agent *model.Agent) (string, error) {
-	// Try to extract API key from agent config first
 	if agent.Config != "" {
-		// Parse config and look for api_key
 		config := make(map[string]interface{})
 		if err := json.Unmarshal([]byte(agent.Config), &config); err == nil {
 			if apiKey, ok := config["api_key"].(string); ok && apiKey != "" {
@@ -183,29 +138,65 @@ func (s *evolutionService) getAgentAPIKey(agent *model.Agent) (string, error) {
 			}
 		}
 	}
-
-	// Generate a simple API key if none exists
 	return "evo-ai-bot-" + agent.ID.String(), nil
 }
 
-func (s *evolutionService) CleanupEvolutionBot(ctx context.Context, botID uuid.UUID) {
-	// Get Bearer token from context (best effort for cleanup)
-	bearerToken, err := contextutils.GetToken(ctx)
-	if err != nil {
-		log.Printf("No Bearer token available for cleanup: %v", err)
-		return
-	}
-
-	err = s.evolutionClient.DeleteAgentBot(ctx, botID, bearerToken)
-	if err != nil {
-		log.Printf("Failed to cleanup Evolution bot %s: %v", botID, err)
-	}
+type advancedBotConfig struct {
+	MessageWaitTime         int                      `json:"message_wait_time"`
+	MessageSignature        string                   `json:"message_signature"`
+	EnableTextSegmentation  bool                     `json:"enable_text_segmentation"`
+	MaxCharactersPerSegment int                      `json:"max_characters_per_segment"`
+	MinSegmentSize          int                      `json:"min_segment_size"`
+	CharacterDelayMS        float64                  `json:"character_delay_ms"`
+	SendAsReply             bool                     `json:"send_as_reply"`
+	InactivityActions       []map[string]interface{} `json:"inactivity_actions,omitempty"`
+	TransferRules           []map[string]interface{} `json:"transfer_rules,omitempty"`
+	PipelineRules           []map[string]interface{} `json:"pipeline_rules,omitempty"`
+	ContactEditConfig       map[string]interface{}   `json:"contact_edit_config,omitempty"`
 }
 
-func (s *evolutionService) getAdvancedBotConfig(agent *model.Agent) *evolution.AdvancedBotConfig {
-	// Extract advanced bot configuration from agent config
-	config := &evolution.AdvancedBotConfig{
-		// Default values
+func (s *evolutionService) buildAgentBot(agent *model.Agent, aiProcessorURL, apiKey string, config *advancedBotConfig) model.AgentBot {
+	outgoingURL := fmt.Sprintf("%s/api/v1/a2a/%s", aiProcessorURL, agent.ID)
+
+	bot := model.AgentBot{
+		Name:                    agent.Name,
+		Description:             agent.Description,
+		OutgoingURL:             outgoingURL,
+		APIKey:                  apiKey,
+		BotType:                 0, // webhook
+		BotProvider:             "evo_ai",
+		MessageSignature:        config.MessageSignature,
+		TextSegmentationEnabled: config.EnableTextSegmentation,
+		TextSegmentationLimit:   config.MaxCharactersPerSegment,
+		TextSegmentationMinSize: config.MinSegmentSize,
+		DelayPerCharacter:       config.CharacterDelayMS,
+		DebounceTime:            config.MessageWaitTime,
+	}
+
+	// Build bot_config JSON
+	botConfig := make(map[string]interface{})
+	if config.SendAsReply {
+		botConfig["send_as_reply"] = true
+	}
+	if len(config.InactivityActions) > 0 {
+		botConfig["inactivity_actions"] = config.InactivityActions
+	}
+	if len(config.TransferRules) > 0 {
+		botConfig["transfer_rules"] = config.TransferRules
+	}
+	if len(config.PipelineRules) > 0 {
+		botConfig["pipeline_rules"] = config.PipelineRules
+	}
+	if len(config.ContactEditConfig) > 0 {
+		botConfig["contact_edit_config"] = config.ContactEditConfig
+	}
+	bot.SetBotConfigMap(botConfig)
+
+	return bot
+}
+
+func (s *evolutionService) getAdvancedBotConfig(agent *model.Agent) *advancedBotConfig {
+	config := &advancedBotConfig{
 		MessageWaitTime:         5,
 		MessageSignature:        "",
 		EnableTextSegmentation:  false,
@@ -218,43 +209,33 @@ func (s *evolutionService) getAdvancedBotConfig(agent *model.Agent) *evolution.A
 		return config
 	}
 
-	// Parse agent config JSON
 	var agentConfig map[string]interface{}
 	if err := json.Unmarshal([]byte(agent.Config), &agentConfig); err != nil {
 		log.Printf("Failed to parse agent config for advanced bot settings: %v", err)
 		return config
 	}
 
-	// Extract values with type checking and defaults
 	if messageWaitTime, ok := agentConfig["message_wait_time"].(float64); ok {
 		config.MessageWaitTime = int(messageWaitTime)
 	}
-
 	if messageSignature, ok := agentConfig["message_signature"].(string); ok {
 		config.MessageSignature = messageSignature
 	}
-
 	if enableTextSegmentation, ok := agentConfig["enable_text_segmentation"].(bool); ok {
 		config.EnableTextSegmentation = enableTextSegmentation
 	}
-
 	if maxCharactersPerSegment, ok := agentConfig["max_characters_per_segment"].(float64); ok {
 		config.MaxCharactersPerSegment = int(maxCharactersPerSegment)
 	}
-
 	if minSegmentSize, ok := agentConfig["min_segment_size"].(float64); ok {
 		config.MinSegmentSize = int(minSegmentSize)
 	}
-
 	if characterDelayMs, ok := agentConfig["character_delay_ms"].(float64); ok {
 		config.CharacterDelayMS = characterDelayMs
 	}
-
 	if sendAsReply, ok := agentConfig["send_as_reply"].(bool); ok {
 		config.SendAsReply = sendAsReply
 	}
-
-	// Extract inactivity actions
 	if inactivityActions, ok := agentConfig["inactivity_actions"].([]interface{}); ok {
 		config.InactivityActions = make([]map[string]interface{}, 0, len(inactivityActions))
 		for _, action := range inactivityActions {
@@ -263,8 +244,6 @@ func (s *evolutionService) getAdvancedBotConfig(agent *model.Agent) *evolution.A
 			}
 		}
 	}
-
-	// Extract transfer rules
 	if transferRules, ok := agentConfig["transfer_rules"].([]interface{}); ok {
 		config.TransferRules = make([]map[string]interface{}, 0, len(transferRules))
 		for _, rule := range transferRules {
@@ -273,8 +252,6 @@ func (s *evolutionService) getAdvancedBotConfig(agent *model.Agent) *evolution.A
 			}
 		}
 	}
-
-	// Extract pipeline rules
 	if pipelineRules, ok := agentConfig["pipeline_rules"].([]interface{}); ok {
 		config.PipelineRules = make([]map[string]interface{}, 0, len(pipelineRules))
 		for _, rule := range pipelineRules {
@@ -283,8 +260,6 @@ func (s *evolutionService) getAdvancedBotConfig(agent *model.Agent) *evolution.A
 			}
 		}
 	}
-
-	// Extract contact edit config
 	if contactEditConfig, ok := agentConfig["contact_edit_config"].(map[string]interface{}); ok {
 		config.ContactEditConfig = contactEditConfig
 	}

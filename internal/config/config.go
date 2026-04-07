@@ -100,7 +100,7 @@ func Load() (*Config, error) {
 			ConnMaxIdleTime: LoadEnvOrDefault("DB_CONN_MAX_IDLE_TIME", "30m"), // 30 minutes
 		},
 		Evolution: EvolutionConfig{
-			BaseURL: LoadEnvOrPanic("EVOLUTION_BASE_URL"),
+			BaseURL: LoadEnvOrDefault("EVOLUTION_BASE_URL", ""),
 		},
 		EvoAuth: EvoAuthConfig{
 			BaseURL: LoadEnvOrPanic("EVO_AUTH_BASE_URL"),
