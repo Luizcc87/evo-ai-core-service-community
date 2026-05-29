@@ -9,6 +9,7 @@ import (
 	repository "evo-ai-core-service/pkg/custom_tool/repository"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -123,7 +124,7 @@ func (s *customToolService) Delete(ctx context.Context, id uuid.UUID) (bool, err
 }
 
 func (s *customToolService) ConvertToHTTPTool(tool model.CustomToolResponse) map[string]interface{} {
-	var errorHandling map[string]interface{}
+	errorHandling := map[string]interface{}{}
 	if tool.ErrorHandling != nil {
 		errorHandling = tool.ErrorHandling
 	}
@@ -157,6 +158,88 @@ func (s *customToolService) ConvertToHTTPTool(tool model.CustomToolResponse) map
 	}
 }
 
+func normalizeHeaders(headers map[string]string) map[string]string {
+	normalized := make(map[string]string, len(headers))
+	for key, value := range headers {
+		normalized[key] = strings.Join(strings.Fields(value), " ")
+	}
+	return normalized
+}
+
+func applyTestValues(value interface{}, values map[string]string, location string) (interface{}, error) {
+	text, ok := value.(string)
+	if !ok {
+		return value, nil
+	}
+
+	resolved := text
+	for {
+		start := strings.Index(resolved, "{")
+		end := strings.Index(resolved[start+1:], "}")
+		if start < 0 || end < 0 {
+			break
+		}
+
+		end = start + 1 + end
+		key := resolved[start+1 : end]
+		replacement, exists := values[key]
+		if !exists {
+			return nil, fmt.Errorf("missing test value for placeholder {%s} in %s; configure it in Valores Padrão before testing", key, location)
+		}
+
+		resolved = resolved[:start] + replacement + resolved[end+1:]
+	}
+
+	return resolved, nil
+}
+
+func buildTestRequest(customTool *model.CustomTool) (string, map[string]interface{}, error) {
+	values := stringutils.JSONToStringMap(customTool.Values)
+	pathParams := stringutils.JSONToStringMap(customTool.PathParams)
+	queryParams := stringutils.JSONToInterfaceMap(customTool.QueryParams)
+	bodyParams := stringutils.JSONToInterfaceMap(customTool.BodyParams)
+
+	endpointValue, err := applyTestValues(customTool.Endpoint, values, "endpoint")
+	if err != nil {
+		return "", nil, err
+	}
+
+	endpoint := endpointValue.(string)
+	for key, value := range pathParams {
+		resolvedValue, err := applyTestValues(value, values, fmt.Sprintf("path param %s", key))
+		if err != nil {
+			return "", nil, err
+		}
+		endpoint = strings.ReplaceAll(endpoint, "{"+key+"}", fmt.Sprintf("%v", resolvedValue))
+	}
+
+	parsedURL, err := url.Parse(endpoint)
+	if err != nil {
+		return "", nil, fmt.Errorf("invalid endpoint URL: %w", err)
+	}
+
+	query := parsedURL.Query()
+	for key, value := range queryParams {
+		resolvedValue, err := applyTestValues(value, values, fmt.Sprintf("query param %s", key))
+		if err != nil {
+			return "", nil, err
+		}
+		query.Set(key, fmt.Sprintf("%v", resolvedValue))
+	}
+	parsedURL.RawQuery = query.Encode()
+
+	body := make(map[string]interface{}, len(bodyParams))
+	for key, value := range bodyParams {
+		resolvedValue, err := applyTestValues(value, values, fmt.Sprintf("body param %s", key))
+		if err != nil {
+			return "", nil, err
+		}
+		body[key] = resolvedValue
+	}
+
+	return parsedURL.String(), body, nil
+}
+
 func (s *customToolService) Test(ctx context.Context, id uuid.UUID) (*model.CustomToolTestResponse, error) {
 	customTool, err := s.GetByID(ctx, id)
 	if err != nil {
@@ -168,7 +251,16 @@ func (s *customToolService) Test(ctx context.Context, id uuid.UUID) (*model.Cust
 		Success: false,
 	}
 
-	headers := stringutils.JSONToStringMap(customTool.Headers)
+	headers := normalizeHeaders(stringutils.JSONToStringMap(customTool.Headers))
+	requestURL, body, err := buildTestRequest(customTool)
+	if err != nil {
+		testResult.Error = err.Error()
+		return &model.CustomToolTestResponse{
+			Tool:       response,
+			TestResult: testResult,
+		}, nil
+	}
+
 	start := time.Now()
 
 	type TestResponse struct{}
@@ -177,28 +269,28 @@ func (s *customToolService) Test(ctx context.Context, id uuid.UUID) (*model.Cust
 	switch strings.ToUpper(customTool.Method) {
 	case http.MethodGet:
 		_, httpErr = httpclient.DoGetJSON[TestResponse](ctx,
-			customTool.Endpoint,
+			requestURL,
 			headers,
 			http.StatusOK,
 		)
 	case http.MethodPost:
 		_, httpErr = httpclient.DoPostJSON[TestResponse](ctx,
-			customTool.Endpoint,
-			nil,
+			requestURL,
+			body,
 			headers,
 			http.StatusOK,
 		)
 	case http.MethodPut:
 		_, httpErr = httpclient.DoPutJSON[TestResponse](ctx,
-			customTool.Endpoint,
-			nil,
+			requestURL,
+			body,
 			headers,
 			http.StatusOK,
 		)
 	case http.MethodDelete:
 		_, httpErr = httpclient.DoDeleteJSON[TestResponse](ctx,
-			customTool.Endpoint,
-			nil,
+			requestURL,
+			body,
 			headers,
 			http.StatusOK,
 		)
