@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"evo-ai-core-service/pkg/evoextensions/runtimecontext"
+	"evo-ai-core-service/pkg/evoextensions/tenantscope"
 	"evo-ai-core-service/pkg/evoextensions/tenantstamp"
 
 	"github.com/evolution-foundation/evo-enterprise-licensing-go/tenant"
@@ -57,6 +58,19 @@ func installRuntimeScope(v1 *gin.RouterGroup, db *gorm.DB) {
 		log.Fatalf("enterprise wiring: register tenant_stamp plugin: %v", err)
 	}
 	log.Println("enterprise wiring: tenant_stamp plugin registered")
+
+	// P0 cross-tenant leak fix: tenantstamp covered WRITES, but READS ran
+	// on the global pool with an empty app.current_tenant_id GUC, and the
+	// RLS policy's permissive "GUC IS NULL → all rows" branch leaked rows
+	// cross-tenant (eg. /agents/apikeys returning another tenant's key).
+	// tenant_scope routes tenant-scoped reads onto the per-request
+	// GUC-carrying tx (published via runtimecontext.WithConn in ginAdapter),
+	// fail-closed when unbound. Read-side symmetric of tenant_stamp; imports
+	// only the neutral runtimecontext bridge, not the enterprise SDK.
+	if err := db.Use(tenantscope.Plugin{}); err != nil {
+		log.Fatalf("enterprise wiring: register tenant_scope plugin: %v", err)
+	}
+	log.Println("enterprise wiring: tenant_scope plugin registered")
 }
 
 // ginAdapter bridges a net/http middleware into the gin chain. It
@@ -77,6 +91,15 @@ func ginAdapter(mw func(http.Handler) http.Handler) gin.HandlerFunc {
 			ctx := r.Context()
 			if tid := tenant.TenantIDFromContext(ctx); tid != "" {
 				ctx = runtimecontext.WithID(ctx, tid)
+				// Publish the per-request, GUC-carrying tx onto the neutral
+				// runtimecontext bridge so the tenant_scope GORM read adapter
+				// routes tenant-scoped reads onto it (RLS sees the GUC). *sql.Tx
+				// satisfies runtimecontext.ScopedConn. Without this, reads run on
+				// the pool with an empty GUC and the permissive RLS branch leaks
+				// rows cross-tenant. (P0 apikeys cross-tenant leak fix.)
+				if tx, ok := tenant.TxFromContext(ctx); ok {
+					ctx = runtimecontext.WithConn(ctx, tx)
+				}
 				c.Request = r.WithContext(ctx)
 			} else {
 				c.Request = r
