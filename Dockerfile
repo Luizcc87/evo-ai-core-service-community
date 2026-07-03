@@ -9,17 +9,19 @@ RUN apk add --no-cache git
 # Instala golang-migrate
 RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 
-# Copia os arquivos de dependência
-COPY go.mod go.sum ./
+# Copia os arquivos de dependência (inclui o modfile community)
+COPY go.mod go.sum go.community.mod go.community.sum ./
 
-# Baixa as dependências
-RUN go mod download
+# Baixa as dependências usando o modfile COMMUNITY — sem o require/replace do
+# evo-enterprise-licensing-go (que só o build tag `enterprise` usa e aponta pra
+# ../evo-crm-enterprise, inexistente num build standalone).
+RUN go mod download -modfile=go.community.mod
 
 # Copia o código fonte
 COPY . .
 
-# Compila a aplicação
-RUN CGO_ENABLED=0 GOOS=linux go build -o /app/main ./cmd/api
+# Compila a aplicação (build community, sem o SDK enterprise)
+RUN CGO_ENABLED=0 GOOS=linux go build -modfile=go.community.mod -o /app/main ./cmd/api
 
 # Debug: Verifica se o binário foi criado
 RUN ls -la /app/main
