@@ -69,10 +69,13 @@ type TestResult struct {
 	URLTested    string  `json:"url_tested"`
 	Message      string  `json:"message,omitempty"`
 	Error        string  `json:"error,omitempty"`
-	// EVO-2139: número de tools descobertas no handshake MCP deste test.
-	// A UI usa isso no toast em vez de `server.tools.length` (que reflete o
-	// DB, potencialmente 0 se o Create original não conseguiu popular).
-	ToolsCount int `json:"tools_count,omitempty"`
+	// EVO-2139: number of tools discovered in this test's MCP handshake.
+	// The UI shows this in the toast instead of `server.tools.length` (which
+	// reflects the DB, possibly 0 if the original Create failed to populate).
+	// No `omitempty`: a successful test that finds 0 tools is a legitimate 0
+	// that must still reach the UI, otherwise the client falls back to the
+	// DB-stale length instead of the live handshake count.
+	ToolsCount int `json:"tools_count"`
 }
 
 type CustomMcpServerTestResponse struct {
