@@ -14,8 +14,6 @@ import (
 	"evo-ai-core-service/pkg/evoextensions/runtimecontext"
 	"fmt"
 	"net/http"
-	"strings"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -203,36 +201,83 @@ func (s *customMcpServerService) Test(ctx context.Context, id uuid.UUID) (*model
 		return nil, errorsPostgres.MapDBError(err, model.CustomMCPServerErrors)
 	}
 
-	url := customMcpServer.URL
-	if !strings.HasSuffix(url, "/health") {
-		url = strings.TrimRight(url, "/") + "/health"
-	}
-
-	headers := stringutils.JSONToStringMap(customMcpServer.Headers)
-	start := time.Now()
-
-	type HealthResponse struct{}
-	_, err = httpclient.DoGetJSON[HealthResponse](ctx, url, headers, http.StatusOK)
-	elapsed := time.Since(start)
-
-	response := customMcpServer.ToResponse()
-	testResult := &model.TestResult{
-		URLTested: url,
-	}
-
-	testResult.Success = true
-	testResult.StatusCode = http.StatusOK
-	testResult.ResponseTime = elapsed.Seconds()
-	testResult.Message = "Connection successful"
-
+	testResult, err := s.testConnection(ctx, customMcpServer.URL, stringutils.JSONToStringMap(customMcpServer.Headers))
 	if err != nil {
-		testResult.StatusCode = http.StatusInternalServerError
-		testResult.Success = false
-		testResult.Error = err.Error()
+		return nil, err
 	}
 
 	return &model.CustomMcpServerTestResponse{
-		Server:     response,
+		Server:     customMcpServer.ToResponse(),
 		TestResult: testResult,
+	}, nil
+}
+
+// EVO-2139: delegate the MCP connection test to the processor, which owns
+// the real handshake (POST JSON-RPC 2.0 `initialize`) via Google ADK's
+// MCPToolset. The previous implementation did a raw `GET /health` from Go
+// and failed for every compliant MCP server — the route does not exist in
+// the MCP spec. Mirrors the discoverTools delegation pattern above,
+// including X-Evo-Tenant-Id propagation (see EVO-1623).
+func (s *customMcpServerService) testConnection(ctx context.Context, url string, headers map[string]string) (*model.TestResult, error) {
+	token, err := contextutils.GetToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	reqHeaders := map[string]string{
+		"Content-Type":  "application/json",
+		"Authorization": fmt.Sprintf("Bearer %s", token),
+	}
+	if tenantID := runtimecontext.IDFromContext(ctx); tenantID != "" {
+		reqHeaders["X-Evo-Tenant-Id"] = tenantID
+	}
+
+	type processorTestResponse struct {
+		Success      bool    `json:"success"`
+		StatusCode   int     `json:"status_code"`
+		ResponseTime float64 `json:"response_time"`
+		URLTested    string  `json:"url_tested"`
+		Message      string  `json:"message"`
+		Error        string  `json:"error"`
+		ToolsCount   int     `json:"tools_count"`
+	}
+
+	// Processor always returns 200 with the result envelope (success/failure
+	// inside `success`), matching the discover-tools pattern.
+	resp, err := httpclient.DoPostJSON[processorTestResponse](
+		ctx,
+		fmt.Sprintf("%s/api/%s/custom-mcp-servers/test-connection", s.cfgAIProcessorService.URL, s.cfgAIProcessorService.Version),
+		map[string]interface{}{
+			"url":     url,
+			"headers": headers,
+		},
+		reqHeaders,
+		http.StatusOK,
+	)
+	if err != nil {
+		return &model.TestResult{
+			Success:   false,
+			URLTested: url,
+			Error:     err.Error(),
+		}, nil
+	}
+
+	statusCode := resp.StatusCode
+	if statusCode == 0 {
+		if resp.Success {
+			statusCode = http.StatusOK
+		} else {
+			statusCode = http.StatusBadGateway
+		}
+	}
+
+	return &model.TestResult{
+		Success:      resp.Success,
+		StatusCode:   statusCode,
+		ResponseTime: resp.ResponseTime,
+		URLTested:    resp.URLTested,
+		Message:      resp.Message,
+		Error:        resp.Error,
+		ToolsCount:   resp.ToolsCount,
 	}, nil
 }

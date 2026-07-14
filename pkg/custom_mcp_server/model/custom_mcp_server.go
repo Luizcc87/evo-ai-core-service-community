@@ -69,6 +69,10 @@ type TestResult struct {
 	URLTested    string  `json:"url_tested"`
 	Message      string  `json:"message,omitempty"`
 	Error        string  `json:"error,omitempty"`
+	// EVO-2139: número de tools descobertas no handshake MCP deste test.
+	// A UI usa isso no toast em vez de `server.tools.length` (que reflete o
+	// DB, potencialmente 0 se o Create original não conseguiu popular).
+	ToolsCount int `json:"tools_count,omitempty"`
 }
 
 type CustomMcpServerTestResponse struct {
@@ -108,6 +112,14 @@ type CustomMcpServerListResponse struct {
 }
 
 func (u *CustomMcpServer) ToResponse() *CustomMcpServerResponse {
+	// EVO-2139: normaliza Tools para [] em vez de nil para que clients HTTP
+	// nunca recebam `"tools": null`. Um server com Tools ainda não descobertas
+	// (ex.: falha intermitente no Create) marshalava como null e crashava
+	// consumidores que acessavam `.length` diretamente.
+	tools := stringutils.JSONToInterfaceMapSlice(u.Tools)
+	if tools == nil {
+		tools = []map[string]interface{}{}
+	}
 	return &CustomMcpServerResponse{
 		ID:          u.ID,
 		Name:        u.Name,
@@ -117,7 +129,7 @@ func (u *CustomMcpServer) ToResponse() *CustomMcpServerResponse {
 		Timeout:     u.Timeout,
 		RetryCount:  u.RetryCount,
 		Tags:        u.Tags,
-		Tools:       stringutils.JSONToInterfaceMapSlice(u.Tools),
+		Tools:       tools,
 		CreatedAt:   u.CreatedAt,
 		UpdatedAt:   u.UpdatedAt,
 	}
